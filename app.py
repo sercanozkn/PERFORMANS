@@ -25,7 +25,7 @@ def check_password():
             submit = st.form_submit_button("Giriş Yap")
             if submit:
                 if username == st.session_state.username and password == st.session_state.password:
-                st.session_state.authenticated = True
+                    st.session_state.authenticated = True
                 st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
                 st.rerun()
             else:
