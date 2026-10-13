@@ -45,7 +45,7 @@ if not os.path.exists(UPLOAD_DIR):
 st.title("📝 Kişi ve Not Yönetim Sistemi")
 st.write("Bu program ile isim, not, isteğe bağlı resim kaydedebilir; kayıtları silebilir ve ayrı ayrı grafik analizleri yapabilirsiniz.")
 # --- KULLANICI ADI VE ŞİFRE DEĞİŞTİRME PANELİ ---
-    with st.sidebar.expander("⚙️ Hesap Ayarları"):
+with st.sidebar.expander("⚙️ Hesap Ayarları"):
         yeni_kullanici = st.text_input("Yeni Kullanıcı Adı", value=st.session_state.username)
         yeni_sifre = st.text_input("Yeni Şifre", type="password")
         
