@@ -23,7 +23,7 @@ def check_password():
             username = st.text_input("Kullanıcı Adı:")
             password = st.text_input("Şifre:", type="password")
             submit = st.form_submit_button("Giriş Yap")
-          if submit:
+            if submit:
         if username == st.session_state.username and password == st.session_state.password:
             st.session_state.authenticated = True
             st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
