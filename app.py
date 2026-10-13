@@ -53,6 +53,7 @@ if st.sidebar.button("Çıkış Yap"):
 with st.form("entry_form", clear_on_submit=True):
     st.subheader("Yeni Kayıt Ekle")
     name = st.text_input("İsim:")
+    date = st.date_input("Tarih:")
     note = st.text_area("Not:")
     uploaded_file = st.file_uploader("Bir Resim Yükle (İsteğe Bağlı)", type=["jpg", "jpeg", "png"])
     
