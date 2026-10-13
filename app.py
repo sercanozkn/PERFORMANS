@@ -5,7 +5,10 @@ from collections import Counter
 
 # Sayfa yapılandırması
 st.set_page_config(page_title="İsim, Not ve Resim Yöneticisi", page_icon="🔒", layout="centered")
-
+if "username" not in st.session_state:
+    st.session_state.username = "admin"
+if "password" not in st.session_state:
+    st.session_state.password = "1234"
 # --- KULLANICI GİRİŞ KONTROLÜ ---
 def check_password():
     """Kullanıcı adı ve şifre kontrolü yapar."""
@@ -21,7 +24,7 @@ def check_password():
             password = st.text_input("Şifre:", type="password")
             submit = st.form_submit_button("Giriş Yap")
             
-            if submit:
+           if username == st.session_state.username and password == st.session_state.password:
                 # Buradan kullanıcı adı ve şifreni değiştirebilirsin
                 if username == "admin" and password == "1234":
                     st.session_state.authenticated = True
