@@ -23,16 +23,14 @@ def check_password():
             username = st.text_input("Kullanıcı Adı:")
             password = st.text_input("Şifre:", type="password")
             submit = st.form_submit_button("Giriş Yap")
-            
-           if username == st.session_state.username and password == st.session_state.password:
-                # Buradan kullanıcı adı ve şifreni değiştirebilirsin
-                if username == "admin" and password == "1234":
-                    st.session_state.authenticated = True
-                    st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
-                    st.rerun()
-                else:
-                    st.error("Kullanıcı adı veya şifre hatalı!")
-        return False
+          if submit:
+        if username == st.session_state.username and password == st.session_state.password:
+            st.session_state.authenticated = True
+            st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
+            st.rerun()
+        else:
+            st.error("Kullanıcı adı veya şifre hatalı!")  
+         
     return True
 
 # Eğer giriş yapılmadıysa programın geri kalanını çalıştırma
