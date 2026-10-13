@@ -24,12 +24,12 @@ def check_password():
             password = st.text_input("Şifre:", type="password")
             submit = st.form_submit_button("Giriş Yap")
             if submit:
-        if username == st.session_state.username and password == st.session_state.password:
-            st.session_state.authenticated = True
-            st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
-            st.rerun()
-        else:
-            st.error("Kullanıcı adı veya şifre hatalı!")  
+                if username == st.session_state.username and password == st.session_state.password:
+                st.session_state.authenticated = True
+                st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
+                st.rerun()
+            else:
+                st.error("Kullanıcı adı veya şifre hatalı!")  
          
     return True
 
@@ -44,7 +44,18 @@ if not os.path.exists(UPLOAD_DIR):
 
 st.title("📝 Kişi ve Not Yönetim Sistemi")
 st.write("Bu program ile isim, not, isteğe bağlı resim kaydedebilir; kayıtları silebilir ve ayrı ayrı grafik analizleri yapabilirsiniz.")
-
+# --- KULLANICI ADI VE ŞİFRE DEĞİŞTİRME PANELİ ---
+    with st.sidebar.expander("⚙️ Hesap Ayarları"):
+        yeni_kullanici = st.text_input("Yeni Kullanıcı Adı", value=st.session_state.username)
+        yeni_sifre = st.text_input("Yeni Şifre", type="password")
+        
+        if st.button("Bilgileri Güncelle"):
+            st.session_state.username = yeni_kullanici
+            if yeni_sifre:
+                st.session_state.password = yeni_sifre
+            st.success("Bilgiler güncellendi! Lütfen yeni bilgilerinizle tekrar giriş yapın.")
+            st.session_state.authenticated = False
+            st.rerun()
 # Çıkış yap butonu (İsteğe bağlı)
 if st.sidebar.button("Çıkış Yap"):
     st.session_state.authenticated = False
