@@ -74,6 +74,7 @@ with st.form("entry_form", clear_on_submit=True):
                 
             st.session_state.records.append({
                 "name": name,
+                 "date": str(date), 
                 "note": note,
                 "image_path": image_path,
                 "has_image": has_image
