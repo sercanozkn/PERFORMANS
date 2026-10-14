@@ -3,21 +3,15 @@ import os
 import pandas as pd
 from collections import Counter
 import json
-import urllib.request
-import urllib.parse
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- GOOGLE SHEETS WEB APP / PUBLIC CSV SENKRONİZASYONU ---
-# Tablonuzu Google Sheets'ten "CSV olarak yayınla" (Publish to web -> CSV) yaparak 
-# alacağınız bağlantıyı buradaki GOOGLE_SHEET_CSV_URL değişkenine yapıştırın.
-# (Alternatif olarak GitHub üzerinden kalıcı JSON tutmak yerine bu en kararlı yöntemdir).
-GOOGLE_SHEET_CSV_URL = st.secrets.get("GOOGLE_SHEET_CSV_URL", "")
+# --- GOOGLE SHEETS CSV BAĞLANTISI ---
+GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQZHf1mu-iVfmFbqXvGH71v1tdY8WLuYb8uVwjURsLDuniZGH7JAIoNJD7v6WR24CKi4lcUE-Mp5CBv/pub?gid=0&single=true&output=csv"
 
 def load_records_from_cloud():
     if not GOOGLE_SHEET_CSV_URL:
-        # Eğer link henüz eklenmediyse boş döner
         return []
     try:
         df = pd.read_csv(GOOGLE_SHEET_CSV_URL)
@@ -46,7 +40,6 @@ if "username" not in st.session_state:
 if "password" not in st.session_state:
     st.session_state.password = "1234"
 
-# Kayıtları buluttan yüklüyoruz
 if "records" not in st.session_state:
     st.session_state.records = load_records_from_cloud()
 
@@ -86,10 +79,6 @@ if not os.path.exists(UPLOAD_DIR):
 
 st.title("📄 Notes - Hata Takip Paneli (Bulut Senkronize)")
 st.markdown("---")
-
-# Eğer Google Sheets bağlantı linki girilmediyse uyarı ver
-if not GOOGLE_SHEET_CSV_URL:
-    st.warning("⚠️ Verilerin telefonda ve bilgisayarda ortak görünmesi için lütfen Streamlit Secrets bölümüne `GOOGLE_SHEET_CSV_URL` adresinizi ekleyin.")
 
 # --- KULLANICI AYARLARI ---
 with st.sidebar.expander("⚙️ Hesap Ayarları"):
@@ -170,10 +159,10 @@ if st.session_state.edit_index is not None:
                         "has_image": len(image_paths) > 0
                     }
                     st.session_state.edit_index = None
-                    st.success("Kayıt güncellendi! (Google E-Tablonuzdan verileri senkronize edebilirsiniz).")
+                    st.success("Kayıt güncellendi!")
                     st.rerun()
                 else:
-                    st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
+                    st.warning("Lütfen İsim dan Not alanlarını boş bırakmayın.")
                     
             if cancel_button:
                 st.session_state.edit_index = None
@@ -287,4 +276,4 @@ if st.session_state.records:
                 
         st.markdown("---")
 else:
-    st.info("Henüz tabloya eklenmiş kayıt bulunmuyor. Google Sheets bağlantınızı tamamlayın.")
+    st.info("Henüz tabloya eklenmiş kayıt bulunmuyor.")
