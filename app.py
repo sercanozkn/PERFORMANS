@@ -5,28 +5,69 @@ from collections import Counter
 import json
 import base64
 import urllib.request
+import urllib.error
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- GITHUB DOSYA SENKRONİZASYON AYARLARI ---
-# Bu kısım verilerin her yerden (telefon/bilgisayar) ortak görünmesini sağlar.
-DATA_FILE = "records.json"
+# --- GITHUB API ÜZERİNDEN SENKRONİZASYON ---
+GITHUB_REPO = st.secrets.get("GITHUB_REPO", "sercanozkn/PERFORMANS")
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
+FILE_PATH = "records.json"
 
-def load_records():
-    # Önce yerel klasörde varsa oradan okuyalım
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            pass
-    return []
+def load_records_from_github():
+    if not GITHUB_TOKEN:
+        return []
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{FILE_PATH}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode())
+            content_decoded = base64.b64decode(data["content"]).decode("utf-8")
+            return json.loads(content_decoded)
+    except Exception:
+        return []
 
-def save_records(records):
-    # Verileri yerel JSON dosyasına kaydet
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=4)
+def save_records_to_github(records):
+    if not GITHUB_TOKEN:
+        return False
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{FILE_PATH}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+    }
+    
+    sha = None
+    try:
+        req_get = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req_get) as resp:
+            sha = json.loads(resp.read().decode())["sha"]
+    except:
+        pass
+
+    file_content = json.dumps(records, ensure_ascii=False, indent=4)
+    content_encoded = base64.b64encode(file_content.encode("utf-8")).decode("utf-8")
+    
+    payload = {
+        "message": "Otomatik kayıt güncellemesi",
+        "content": content_encoded,
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    try:
+        data_bytes = json.dumps(payload).encode("utf-8")
+        req_put = urllib.request.Request(url, data=data_bytes, headers=headers, method="PUT")
+        with urllib.request.urlopen(req_put):
+            return True
+    except Exception as e:
+        st.error(f"GitHub kayıt hatası: {e}")
+        return False
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -39,7 +80,7 @@ if "password" not in st.session_state:
     st.session_state.password = "1234"
 
 if "records" not in st.session_state:
-    st.session_state.records = load_records()
+    st.session_state.records = load_records_from_github()
 
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
@@ -75,7 +116,7 @@ UPLOAD_DIR = "uploaded_images"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-st.title("📄 Notes - Hata Takip Paneli (Senkronize)")
+st.title("📄 Notes - Hata Takip Paneli (Bulut Senkronize)")
 st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
@@ -156,7 +197,7 @@ if st.session_state.edit_index is not None:
                         "image_paths": image_paths,
                         "has_image": len(image_paths) > 0
                     }
-                    save_records(st.session_state.records)
+                    save_records_to_github(st.session_state.records)
                     st.session_state.edit_index = None
                     st.success("Kayıt başarıyla güncellendi!")
                     st.rerun()
@@ -197,7 +238,7 @@ with st.form("entry_form", clear_on_submit=True):
                 "has_image": len(image_paths) > 0
             })
             
-            save_records(st.session_state.records)
+            save_records_to_github(st.session_state.records)
             st.success(f"'{name}' için kayıt/hata başarıyla eklendi!")
             st.rerun()
         else:
@@ -272,7 +313,7 @@ if st.session_state.records:
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
-                save_records(st.session_state.records)
+                save_records_to_github(st.session_state.records)
                 st.rerun()
                 
         st.markdown("---")
