@@ -88,32 +88,42 @@ if st.session_state.zoomed_image:
         st.image(st.session_state.zoomed_image, use_column_width=True)
     st.markdown("---")
 
-# --- DÜZENLEME VEYA YENİ KAYIT FORMU ---
+# --- EĞER BİR KAYDA "OPEN" DENİLDİYSE DETAY VE DÜZENLEME PANELİ ---
 if st.session_state.edit_index is not None:
     idx = st.session_state.edit_index
     current_record = st.session_state.records[idx]
     
-    st.subheader(f"✏️ '{current_record['name']}' Kaydını Düzenle")
+    st.markdown(f"### 📂 Kayıt Detayı ve Düzenleme (OPEN Mode)")
+    st.info(f"Şu an '{current_record['name']}' adlı kaydı görüntülüyorsunuz. Aşağıdan bilgileri güncelleyebilirsiniz.")
     
-    edit_name = st.text_input("İsim (Text):", value=current_record.get("name", ""))
-    
-    try:
-        default_date = pd.to_datetime(current_record.get("date")).date()
-    except:
-        default_date = pd.Timestamp.today().date()
+    with st.form("open_edit_form"):
+        edit_name = st.text_input("Text (İsim):", value=current_record.get("name", ""))
         
-    edit_date = st.date_input("Date:", value=default_date, format="DD/MM/YYYY")
-    edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
-    
-    existing_paths = current_record.get("image_paths", [])
-    if not existing_paths and current_record.get("image_path"):
-        existing_paths = [current_record["image_path"]]
+        try:
+            default_date = pd.to_datetime(current_record.get("date")).date()
+        except:
+            default_date = pd.Timestamp.today().date()
+            
+        edit_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY")
+        edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
         
-    edit_uploaded_files = st.file_uploader("Files & media (Yeni Resimler Ekle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-    
-    col_f1, col_f2 = st.columns(2)
-    with col_f1:
-        if st.button("Değişiklikleri Kaydet", key="save_edit_btn"):
+        # Mevcut resimleri listele
+        existing_paths = current_record.get("image_paths", [])
+        if not existing_paths and current_record.get("image_path"):
+            existing_paths = [current_record["image_path"]]
+            
+        if existing_paths:
+            st.write(f"Mevcut Yüklü Resim Sayısı: {len(existing_paths)}")
+            
+        edit_uploaded_files = st.file_uploader("Files & media (Ekstra Yeni Resimler Ekle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            update_button = st.form_submit_button(label="Değişiklikleri Kaydet")
+        with col_f2:
+            cancel_button = st.form_submit_button(label="Kapat / Geri Dön")
+            
+        if update_button:
             if edit_name and edit_note:
                 image_paths = list(existing_paths)
                 if edit_uploaded_files:
@@ -138,49 +148,51 @@ if st.session_state.edit_index is not None:
                 st.rerun()
             else:
                 st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
-    with col_f2:
-        if st.button("İptal", key="cancel_edit_btn"):
+                
+        if cancel_button:
             st.session_state.edit_index = None
             st.rerun()
             
-else:
-    with st.form("entry_form", clear_on_submit=True):
-        st.subheader("➕ Yeni Not / Kayıt Ekle")
-        name = st.text_input("Text (İsim):")
-        date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
-        note = st.text_area("Not / Açıklama:")
-        uploaded_files = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-        
-        submit_button = st.form_submit_button(label="Tabloya Ekle")
-        
-        if submit_button:
-            if name and note:
-                image_paths = []
-                has_image = False
+    st.markdown("---")
+
+# --- YENİ KAYIT EKLEME FORMU ---
+with st.form("entry_form", clear_on_submit=True):
+    st.subheader("➕ Yeni Not / Kayıt Ekle")
+    name = st.text_input("Text (İsim):")
+    date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
+    note = st.text_area("Not / Açıklama:")
+    uploaded_files = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    
+    submit_button = st.form_submit_button(label="Tabloya Ekle")
+    
+    if submit_button:
+        if name and note:
+            image_paths = []
+            has_image = False
+            
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    image_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
+                    with open(image_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    image_paths.append(image_path)
+                has_image = True
+            
+            if "records" not in st.session_state:
+                st.session_state.records = []
                 
-                if uploaded_files:
-                    for uploaded_file in uploaded_files:
-                        image_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
-                        with open(image_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        image_paths.append(image_path)
-                    has_image = True
-                
-                if "records" not in st.session_state:
-                    st.session_state.records = []
-                    
-                st.session_state.records.append({
-                    "name": name,
-                    "date": str(date),
-                    "note": note,
-                    "image_path": image_paths[0] if image_paths else None,
-                    "image_paths": image_paths,
-                    "has_image": has_image
-                })
-                st.success(f"'{name}' başarıyla eklendi!")
-                st.rerun()
-            else:
-                st.warning("Lütfen İsim ve Not alanlarını doldurun.")
+            st.session_state.records.append({
+                "name": name,
+                "date": str(date),
+                "note": note,
+                "image_path": image_paths[0] if image_paths else None,
+                "image_paths": image_paths,
+                "has_image": has_image
+            })
+            st.success(f"'{name}' başarıyla eklendi!")
+            st.rerun()
+        else:
+            st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
 # --- GRAFİKLER BÖLÜMÜ ---
 if "records" in st.session_state and st.session_state.records:
@@ -216,7 +228,7 @@ st.markdown("---")
 st.subheader("📋 All notes (Kayıt Tablosu)")
 
 if "records" in st.session_state and st.session_state.records:
-    # Tablo Başlıkları (Notion Görünümü)
+    # Tablo Başlıkları
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
     with header_col1:
         st.markdown("**İşlem (OPEN)**")
@@ -233,20 +245,19 @@ if "records" in st.session_state and st.session_state.records:
     for idx, record in enumerate(st.session_state.records):
         row_col1, row_col2, row_col3, row_col4, row_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
         
-        # 1. OPEN / Düzenle Butonu
+        # 1. OPEN Butonu
         with row_col1:
             if st.button("OPEN", key=f"open_{idx}"):
                 st.session_state.edit_index = idx
                 st.rerun()
                 
-        # 2. Files & media (Resimler Yan Yana Kareler Halinde)
+        # 2. Files & media (Resimler Yan Yana Küçük Kareler)
         with row_col2:
             paths = record.get("image_paths", [])
             if not paths and record.get("image_path"):
                 paths = [record["image_path"]]
             
             if paths:
-                # Resimleri yan yana küçük kareler olarak göstermek için alt sütunlar
                 img_cols = st.columns(len(paths) if len(paths) <= 4 else 4)
                 for p_idx, img_p in enumerate(paths):
                     if os.path.exists(img_p):
