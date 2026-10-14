@@ -147,7 +147,7 @@ if st.session_state.edit_index is not None:
                     st.success("Kayıt başarıyla güncellendi!")
                     st.rerun()
                 else:
-                    st.warning("Lütfen İsim dan Not alanlarını boş bırakmayın.")
+                    st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
                     
             if cancel_button:
                 st.session_state.edit_index = None
@@ -193,23 +193,30 @@ with st.form("entry_form", clear_on_submit=True):
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- HATA ANALİZİ VE GRAFİK PANELİ ---
+# --- HATA ANALİZİ, ORTALAMA HESABI VE GRAFİK PANELİ ---
 if "records" in st.session_state and st.session_state.records:
     st.markdown("---")
-    st.subheader("📊 Hata Analizi ve İstatistik Paneli")
+    st.subheader("📊 Hata Analizi ve Ortalama Paneli")
     
     all_names = [r["name"] for r in st.session_state.records]
-    df_errors = pd.DataFrame(list(Counter(all_names).items()), columns=["İsim", "Hata (Kayıt) Sayısı"])
+    error_counts = Counter(all_names)
+    df_errors = pd.DataFrame(list(error_counts.items()), columns=["İsim", "Hata Sayısı"])
+    
+    # Ortalama hesaplama (Toplam hata / Kişi sayısı veya genel ortalama)
+    ortalama_hata = df_errors["Hata Sayısı"].mean()
+    
+    # Şık bir metrik kartı ile ortalamayı göster
+    st.metric(label="📈 Kişi Başı Ortalama Hata (Kayıt) Sayısı", value=f"{ortalama_hata:.2f}")
     
     col_g1, col_g2 = st.columns(2)
     with col_g1:
         st.markdown("### 🔴 En Çok Hata Yapanlar (Çoktan Aza)")
-        df_max = df_errors.sort_values(by="Hata (Kayıt) Sayısı", ascending=False).set_index("İsim")
+        df_max = df_errors.sort_values(by="Hata Sayısı", ascending=False).set_index("İsim")
         st.bar_chart(df_max)
             
     with col_g2:
         st.markdown("### 🟢 En Az Hata Yapanlar (Azdan Çoka)")
-        df_min = df_errors.sort_values(by="Hata (Kayıt) Sayısı", ascending=True).set_index("İsim")
+        df_min = df_errors.sort_values(by="Hata Sayısı", ascending=True).set_index("İsim")
         st.bar_chart(df_min)
 
 # --- NOTION TARZI TABLO VE SATIR GÖRÜNÜMÜ ---
