@@ -2,61 +2,31 @@ import streamlit as st
 import os
 import pandas as pd
 from collections import Counter
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import json
+import base64
+import urllib.request
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- GOOGLE SHEETS BAĞLANTI AYARLARI ---
-# Not: Google Cloud Service Account JSON bilgilerinizi Streamlit Secrets (st.secrets) içine eklemeniz gerekecek.
-def get_google_sheet():
-    try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # Bilgileri Streamlit Secrets'tan alıyoruz (güvenli yöntem)
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
-        # Google E-Tablonuzun adı: "NotesHataVeritabani"
-        sheet = client.open("NotesHataVeritabani").sheet1
-        return sheet
-    except Exception as e:
-        # Eğer secrets henüz ayarlanmadıysa hata vermemesi için geçici uyarı
-        return None
+# --- GITHUB DOSYA SENKRONİZASYON AYARLARI ---
+# Bu kısım verilerin her yerden (telefon/bilgisayar) ortak görünmesini sağlar.
+DATA_FILE = "records.json"
 
-def load_records_from_sheet():
-    sheet = get_google_sheet()
-    if sheet:
-        data = sheet.get_all_records()
-        records = []
-        for row in data:
-            # image_paths sütunu metin olarak saklandığı için listeden geri çeviriyoruz
-            img_paths = json.loads(row["image_paths"]) if row["image_paths"] else []
-            records.append({
-                "name": row["name"],
-                "date": row["date"],
-                "note": row["note"],
-                "image_path": img_paths[0] if img_paths else None,
-                "image_paths": img_paths,
-                "has_image": len(img_paths) > 0
-            })
-        return records
+def load_records():
+    # Önce yerel klasörde varsa oradan okuyalım
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
     return []
 
-def save_records_to_sheet(records):
-    sheet = get_google_sheet()
-    if sheet:
-        sheet.clear()
-        # Başlıklar
-        sheet.append_row(["name", "date", "note", "image_paths"])
-        for r in records:
-            sheet.append_row([
-                r["name"],
-                r["date"],
-                r["note"],
-                json.dumps(r.get("image_paths", []))
-            ])
+def save_records(records):
+    # Verileri yerel JSON dosyasına kaydet
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=4)
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -68,9 +38,8 @@ if "username" not in st.session_state:
 if "password" not in st.session_state:
     st.session_state.password = "1234"
 
-# Kayıtları doğrudan Google Sheets'ten çekiyoruz (Böylece telefondan ve bilgisayardan aynı görünür)
 if "records" not in st.session_state:
-    st.session_state.records = load_records_from_sheet()
+    st.session_state.records = load_records()
 
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
@@ -106,7 +75,7 @@ UPLOAD_DIR = "uploaded_images"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-st.title("📄 Notes - Hata Takip Paneli (Bulut Senkronize)")
+st.title("📄 Notes - Hata Takip Paneli (Senkronize)")
 st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
@@ -187,8 +156,7 @@ if st.session_state.edit_index is not None:
                         "image_paths": image_paths,
                         "has_image": len(image_paths) > 0
                     }
-                    # Google Sheets'e kaydet
-                    save_records_to_sheet(st.session_state.records)
+                    save_records(st.session_state.records)
                     st.session_state.edit_index = None
                     st.success("Kayıt başarıyla güncellendi!")
                     st.rerun()
@@ -229,9 +197,7 @@ with st.form("entry_form", clear_on_submit=True):
                 "has_image": len(image_paths) > 0
             })
             
-            # Google Sheets'e kaydet (Senkronizasyon)
-            save_records_to_sheet(st.session_state.records)
-            
+            save_records(st.session_state.records)
             st.success(f"'{name}' için kayıt/hata başarıyla eklendi!")
             st.rerun()
         else:
@@ -306,7 +272,7 @@ if st.session_state.records:
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
-                save_records_to_sheet(st.session_state.records)
+                save_records(st.session_state.records)
                 st.rerun()
                 
         st.markdown("---")
