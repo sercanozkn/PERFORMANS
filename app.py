@@ -2,9 +2,61 @@ import streamlit as st
 import os
 import pandas as pd
 from collections import Counter
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import json
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
+
+# --- GOOGLE SHEETS BAĞLANTI AYARLARI ---
+# Not: Google Cloud Service Account JSON bilgilerinizi Streamlit Secrets (st.secrets) içine eklemeniz gerekecek.
+def get_google_sheet():
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        # Bilgileri Streamlit Secrets'tan alıyoruz (güvenli yöntem)
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+        # Google E-Tablonuzun adı: "NotesHataVeritabani"
+        sheet = client.open("NotesHataVeritabani").sheet1
+        return sheet
+    except Exception as e:
+        # Eğer secrets henüz ayarlanmadıysa hata vermemesi için geçici uyarı
+        return None
+
+def load_records_from_sheet():
+    sheet = get_google_sheet()
+    if sheet:
+        data = sheet.get_all_records()
+        records = []
+        for row in data:
+            # image_paths sütunu metin olarak saklandığı için listeden geri çeviriyoruz
+            img_paths = json.loads(row["image_paths"]) if row["image_paths"] else []
+            records.append({
+                "name": row["name"],
+                "date": row["date"],
+                "note": row["note"],
+                "image_path": img_paths[0] if img_paths else None,
+                "image_paths": img_paths,
+                "has_image": len(img_paths) > 0
+            })
+        return records
+    return []
+
+def save_records_to_sheet(records):
+    sheet = get_google_sheet()
+    if sheet:
+        sheet.clear()
+        # Başlıklar
+        sheet.append_row(["name", "date", "note", "image_paths"])
+        for r in records:
+            sheet.append_row([
+                r["name"],
+                r["date"],
+                r["note"],
+                json.dumps(r.get("image_paths", []))
+            ])
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -16,8 +68,9 @@ if "username" not in st.session_state:
 if "password" not in st.session_state:
     st.session_state.password = "1234"
 
+# Kayıtları doğrudan Google Sheets'ten çekiyoruz (Böylece telefondan ve bilgisayardan aynı görünür)
 if "records" not in st.session_state:
-    st.session_state.records = []
+    st.session_state.records = load_records_from_sheet()
 
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
@@ -53,8 +106,7 @@ UPLOAD_DIR = "uploaded_images"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# Notion Tarzı Üst Başlık
-st.title("📄 Notes - Hata Takip Paneli")
+st.title("📄 Notes - Hata Takip Paneli (Bulut Senkronize)")
 st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
@@ -74,7 +126,7 @@ if st.sidebar.button("Çıkış Yap"):
     st.session_state.authenticated = False
     st.rerun()
 
-# --- BÜYÜTÜLEN RESİM İÇİN X İLE KAPATMA PENCERESİ ---
+# --- BÜYÜTÜLEN RESİM ---
 if st.session_state.zoomed_image:
     col_z1, col_z2 = st.columns([10, 1])
     with col_z1:
@@ -88,14 +140,13 @@ if st.session_state.zoomed_image:
         st.image(st.session_state.zoomed_image, use_column_width=True)
     st.markdown("---")
 
-# --- OPEN BUTONUNA BASILINCA AÇILAN DETAY VE DÜZENLEME PANELİ ---
+# --- DÜZENLEME PANELİ ---
 if st.session_state.edit_index is not None:
     idx = st.session_state.edit_index
     if idx < len(st.session_state.records):
         current_record = st.session_state.records[idx]
         
         st.markdown(f"### 📂 Ayrıntı ve Düzenleme Ekranı: {current_record['name']}")
-        st.info("Bu alanda seçilen kişinin kayıtlarını/hatalarını inceleyebilir ve güncelleyebilirsiniz.")
         
         with st.form("open_detail_edit_form"):
             edit_name = st.text_input("Text (İsim):", value=current_record.get("name", ""))
@@ -109,12 +160,6 @@ if st.session_state.edit_index is not None:
             edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
             
             existing_paths = current_record.get("image_paths", [])
-            if not existing_paths and current_record.get("image_path"):
-                existing_paths = [current_record["image_path"]]
-                
-            if existing_paths:
-                st.write(f"Mevcut Yüklü Resim Sayısı: {len(existing_paths)}")
-                
             edit_uploaded_files = st.file_uploader("Files & media (Ekstra Yeni Resimler Ekle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
             
             col_f1, col_f2 = st.columns(2)
@@ -134,15 +179,16 @@ if st.session_state.edit_index is not None:
                             if img_path not in image_paths:
                                 image_paths.append(img_path)
                     
-                    has_img = len(image_paths) > 0
                     st.session_state.records[idx] = {
                         "name": edit_name,
                         "date": str(edit_date),
                         "note": edit_note,
                         "image_path": image_paths[0] if image_paths else None,
                         "image_paths": image_paths,
-                        "has_image": has_img
+                        "has_image": len(image_paths) > 0
                     }
+                    # Google Sheets'e kaydet
+                    save_records_to_sheet(st.session_state.records)
                     st.session_state.edit_index = None
                     st.success("Kayıt başarıyla güncellendi!")
                     st.rerun()
@@ -154,7 +200,7 @@ if st.session_state.edit_index is not None:
                 st.rerun()
         st.markdown("---")
 
-# --- YENİ KAYIT (HATA) EKLEME FORMU ---
+# --- YENİ KAYIT EKLEME FORMU ---
 with st.form("entry_form", clear_on_submit=True):
     st.subheader("➕ Yeni Kayıt / Hata Ekle")
     name = st.text_input("Text (İsim):")
@@ -167,74 +213,64 @@ with st.form("entry_form", clear_on_submit=True):
     if submit_button:
         if name and note:
             image_paths = []
-            has_image = False
-            
             if uploaded_files:
                 for uploaded_file in uploaded_files:
                     image_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
                     with open(image_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                     image_paths.append(image_path)
-                has_image = True
             
-            if "records" not in st.session_state:
-                st.session_state.records = []
-                
             st.session_state.records.append({
                 "name": name,
                 "date": str(date),
                 "note": note,
                 "image_path": image_paths[0] if image_paths else None,
                 "image_paths": image_paths,
-                "has_image": has_image
+                "has_image": len(image_paths) > 0
             })
+            
+            # Google Sheets'e kaydet (Senkronizasyon)
+            save_records_to_sheet(st.session_state.records)
+            
             st.success(f"'{name}' için kayıt/hata başarıyla eklendi!")
             st.rerun()
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- HATA ANALİZİ, ORTALAMA HESABI VE GRAFİK PANELİ ---
-if "records" in st.session_state and st.session_state.records:
+# --- ANALİZ PANELİ ---
+if st.session_state.records:
     st.markdown("---")
     st.subheader("📊 Hata Analizi ve Ortalama Paneli")
     
     all_names = [r["name"] for r in st.session_state.records]
     error_counts = Counter(all_names)
     df_errors = pd.DataFrame(list(error_counts.items()), columns=["İsim", "Hata Sayısı"])
-    
-    # Ortalama hesaplama (Toplam hata / Kişi sayısı veya genel ortalama)
     ortalama_hata = df_errors["Hata Sayısı"].mean()
     
-    # Şık bir metrik kartı ile ortalamayı göster
     st.metric(label="📈 Kişi Başı Ortalama Hata (Kayıt) Sayısı", value=f"{ortalama_hata:.2f}")
     
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        st.markdown("### 🔴 En Çok Hata Yapanlar (Çoktan Aza)")
+        st.markdown("### 🔴 En Çok Hata Yapanlar")
         df_max = df_errors.sort_values(by="Hata Sayısı", ascending=False).set_index("İsim")
         st.bar_chart(df_max)
             
     with col_g2:
-        st.markdown("### 🟢 En Az Hata Yapanlar (Azdan Çoka)")
+        st.markdown("### 🟢 En Az Hata Yapanlar")
         df_min = df_errors.sort_values(by="Hata Sayısı", ascending=True).set_index("İsim")
         st.bar_chart(df_min)
 
-# --- NOTION TARZI TABLO VE SATIR GÖRÜNÜMÜ ---
+# --- TABLO GÖRÜNÜMÜ ---
 st.markdown("---")
 st.subheader("📋 All notes (Kayıt ve Hata Tablosu)")
 
-if "records" in st.session_state and st.session_state.records:
+if st.session_state.records:
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
-    with header_col1:
-        st.markdown("**İşlem (OPEN)**")
-    with header_col2:
-        st.markdown("**Files & media**")
-    with header_col3:
-        st.markdown("**Text (İsim / Not)**")
-    with header_col4:
-        st.markdown("**Date**")
-    with header_col5:
-        st.markdown("**Actions (Sil)**")
+    with header_col1: st.markdown("**İşlem (OPEN)**")
+    with header_col2: st.markdown("**Files & media**")
+    with header_col3: st.markdown("**Text (İsim / Not)**")
+    with header_col4: st.markdown("**Date**")
+    with header_col5: st.markdown("**Actions (Sil)**")
     st.markdown("---")
 
     for idx, record in enumerate(st.session_state.records):
@@ -247,9 +283,6 @@ if "records" in st.session_state and st.session_state.records:
                 
         with row_col2:
             paths = record.get("image_paths", [])
-            if not paths and record.get("image_path"):
-                paths = [record["image_path"]]
-            
             if paths:
                 img_cols = st.columns(len(paths) if len(paths) <= 4 else 4)
                 for p_idx, img_p in enumerate(paths):
@@ -273,6 +306,7 @@ if "records" in st.session_state and st.session_state.records:
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
+                save_records_to_sheet(st.session_state.records)
                 st.rerun()
                 
         st.markdown("---")
