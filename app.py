@@ -4,7 +4,7 @@ import pandas as pd
 from collections import Counter
 
 # --- SAYFA AYARI ---
-st.set_page_config(page_title="Kişi ve Not Yönetim Sistemi", layout="centered")
+st.set_page_config(page_title="Notes - Kişi ve Not Yönetimi", layout="wide")
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -53,8 +53,9 @@ UPLOAD_DIR = "uploaded_images"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-st.title("📝 Kişi ve Not Yönetim Sistemi")
-st.write("Bu program ile isim, not, çoklu resim kaydedebilir; resimlere tıklayarak büyütebilir, X ile kapatabilir, kayıtları düzenleyebilir ve grafik analizi yapabilirsiniz.")
+# Notion Tarzı Üst Başlık
+st.title("📄 Notes")
+st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
 with st.sidebar.expander("⚙️ Hesap Ayarları"):
@@ -73,13 +74,11 @@ if st.sidebar.button("Çıkış Yap"):
     st.session_state.authenticated = False
     st.rerun()
 
-st.markdown("---")
-
 # --- BÜYÜTÜLEN RESİM İÇİN X (ÇARPI) İLE KAPATMA PENCERESİ ---
 if st.session_state.zoomed_image:
-    col_z1, col_z2 = st.columns([8, 1])
+    col_z1, col_z2 = st.columns([10, 1])
     with col_z1:
-        st.markdown("### 🔍 Resim Önizleme")
+        st.markdown("### 🔍 Resim Büyük Önizleme")
     with col_z2:
         if st.button("❌ Kapat", key="close_zoom"):
             st.session_state.zoomed_image = None
@@ -96,25 +95,21 @@ if st.session_state.edit_index is not None:
     
     st.subheader(f"✏️ '{current_record['name']}' Kaydını Düzenle")
     
-    # Form dışında metin/tarih alanları ile güvenli veri tutma (düzenleme hatasını çözer)
-    edit_name = st.text_input("İsim:", value=current_record.get("name", ""))
+    edit_name = st.text_input("İsim (Text):", value=current_record.get("name", ""))
     
     try:
         default_date = pd.to_datetime(current_record.get("date")).date()
     except:
         default_date = pd.Timestamp.today().date()
         
-    edit_date = st.date_input("Tarih:", value=default_date, format="DD/MM/YYYY")
-    edit_note = st.text_area("Not:", value=current_record.get("note", ""))
+    edit_date = st.date_input("Date:", value=default_date, format="DD/MM/YYYY")
+    edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
     
     existing_paths = current_record.get("image_paths", [])
     if not existing_paths and current_record.get("image_path"):
         existing_paths = [current_record["image_path"]]
         
-    if existing_paths:
-        st.write(f"Mevcut Yüklü Resim Sayısı: {len(existing_paths)}")
-        
-    edit_uploaded_files = st.file_uploader("Ekstra Yeni Resimler Ekle (İsteğe Bağlı)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    edit_uploaded_files = st.file_uploader("Files & media (Yeni Resimler Ekle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
     
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -150,13 +145,13 @@ if st.session_state.edit_index is not None:
             
 else:
     with st.form("entry_form", clear_on_submit=True):
-        st.subheader("Yeni Kayıt Ekle")
-        name = st.text_input("İsim:")
-        date = st.date_input("Tarih:", format="DD/MM/YYYY")
-        note = st.text_area("Not:")
-        uploaded_files = st.file_uploader("Bir veya Birden Fazla Resim Yükle (İsteğe Bağlı)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+        st.subheader("➕ Yeni Not / Kayıt Ekle")
+        name = st.text_input("Text (İsim):")
+        date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
+        note = st.text_area("Not / Açıklama:")
+        uploaded_files = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
         
-        submit_button = st.form_submit_button(label="Kaydet")
+        submit_button = st.form_submit_button(label="Tabloya Ekle")
         
         if submit_button:
             if name and note:
@@ -182,7 +177,7 @@ else:
                     "image_paths": image_paths,
                     "has_image": has_image
                 })
-                st.success(f"'{name}' başarıyla kaydedildi!")
+                st.success(f"'{name}' başarıyla eklendi!")
                 st.rerun()
             else:
                 st.warning("Lütfen İsim ve Not alanlarını doldurun.")
@@ -197,58 +192,88 @@ if "records" in st.session_state and st.session_state.records:
     
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        st.markdown("### 🖼️ 1. Resimli Kayıtlar Grafiği")
+        st.markdown("### 🖼️ Resimli Kayıtlar Dağılımı")
         if resimli_records:
             img_names = [r["name"] for r in resimli_records]
             df_img = pd.DataFrame(list(Counter(img_names).items()), columns=["İsim", "Tekrar Sayısı"])
             df_img = df_img.sort_values(by="Tekrar Sayısı", ascending=False).set_index("İsim")
             st.bar_chart(df_img)
         else:
-            st.info("Henüz resimli kayıt eklenmedi.")
+            st.info("Resimli kayıt yok.")
             
     with col_g2:
-        st.markdown("### 📄 2. Resimsiz Kayıtlar Grafiği")
+        st.markdown("### 📄 Resimsiz Kayıtlar Dağılımı")
         if resimsiz_records:
             no_img_names = [r["name"] for r in resimsiz_records]
             df_no_img = pd.DataFrame(list(Counter(no_img_names).items()), columns=["İsim", "Tekrar Sayısı"])
             df_no_img = df_no_img.sort_values(by="Tekrar Sayısı", ascending=False).set_index("İsim")
             st.bar_chart(df_no_img)
         else:
-            st.info("Henüz resimsiz kayıt eklenmedi.")
+            st.info("Resimsiz kayıt yok.")
 
-# --- KAYITLARI LİSTELEME, BÜYÜTME, DÜZENLEME VE SİLME ---
+# --- NOTION TARZI TABLO VE SATIR GÖRÜNÜMÜ ---
 st.markdown("---")
-st.subheader("📋 Kayıtlı Veriler ve İşlemler")
+st.subheader("📋 All notes (Kayıt Tablosu)")
 
 if "records" in st.session_state and st.session_state.records:
+    # Tablo Başlıkları (Notion Görünümü)
+    header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
+    with header_col1:
+        st.markdown("**İşlem (OPEN)**")
+    with header_col2:
+        st.markdown("**Files & media**")
+    with header_col3:
+        st.markdown("**Text (İsim / Not)**")
+    with header_col4:
+        st.markdown("**Date**")
+    with header_col5:
+        st.markdown("**Actions (Sil)**")
+    st.markdown("---")
+
     for idx, record in enumerate(st.session_state.records):
-        with st.container():
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col1:
-                paths = record.get("image_paths", [])
-                if not paths and record.get("image_path"):
-                    paths = [record["image_path"]]
+        row_col1, row_col2, row_col3, row_col4, row_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
+        
+        # 1. OPEN / Düzenle Butonu
+        with row_col1:
+            if st.button("OPEN", key=f"open_{idx}"):
+                st.session_state.edit_index = idx
+                st.rerun()
                 
-                if paths:
-                    for p_idx, img_p in enumerate(paths):
-                        if os.path.exists(img_p):
-                            st.image(img_p, width=100)
-                            if st.button("🔍 Büyüt", key=f"zoom_{idx}_{p_idx}"):
+        # 2. Files & media (Resimler Yan Yana Kareler Halinde)
+        with row_col2:
+            paths = record.get("image_paths", [])
+            if not paths and record.get("image_path"):
+                paths = [record["image_path"]]
+            
+            if paths:
+                # Resimleri yan yana küçük kareler olarak göstermek için alt sütunlar
+                img_cols = st.columns(len(paths) if len(paths) <= 4 else 4)
+                for p_idx, img_p in enumerate(paths):
+                    if os.path.exists(img_p):
+                        col_target = img_cols[p_idx % len(img_cols)]
+                        with col_target:
+                            st.image(img_p, width=50)
+                            if st.button("🔍", key=f"zoom_{idx}_{p_idx}", help="Büyüt"):
                                 st.session_state.zoomed_image = img_p
                                 st.rerun()
-                else:
-                    st.info("Resim yok")
-            with col2:
-                st.markdown(f"### **{record['name']}**")
-                st.markdown(f"**Tarih:** {record['date']}")
-                st.write(f"**Not:** {record['note']}")
-            with col3:
-                if st.button("Düzenle", key=f"edit_{idx}"):
-                    st.session_state.edit_index = idx
-                    st.rerun()
-                if st.button("Sil", key=f"del_{idx}"):
-                    st.session_state.records.pop(idx)
-                    st.rerun()
-            st.markdown("---")
+            else:
+                st.write("-")
+                
+        # 3. Text (İsim ve Not)
+        with row_col3:
+            st.markdown(f"**{record['name']}**")
+            st.caption(f"{record['note']}")
+            
+        # 4. Date
+        with row_col4:
+            st.write(record['date'])
+            
+        # 5. Sil Butonu
+        with row_col5:
+            if st.button("🗑️ Sil", key=f"del_{idx}"):
+                st.session_state.records.pop(idx)
+                st.rerun()
+                
+        st.markdown("---")
 else:
-    st.info("Henüz kayıt eklenmedi.")
+    st.info("Henüz tabloya eklenmiş kayıt bulunmuyor.")
