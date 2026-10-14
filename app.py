@@ -65,20 +65,23 @@ if st.sidebar.button("Çıkış Yap"):
 with st.form("entry_form", clear_on_submit=True):
     st.subheader("Yeni Kayıt Ekle")
     name = st.text_input("İsim:")
-    date = st.date_input("Tarih:",format="DD/MM/YYYY")
+    date = st.date_input("Tarih:", format="DD/MM/YYYY")
     note = st.text_area("Not:")
-    uploaded_file = st.file_uploader("Bir Resim Yükle (İsteğe Bağlı)", type=["jpg", "jpeg", "png"])
+    uploaded_files = st.file_uploader("Bir veya Birden Fazla Resim Yükle (İsteğe Bağlı)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
     
     submit_button = st.form_submit_button(label="Kaydet")
     
     if submit_button:
         if name and note:
-            image_path = None
+            image_paths = []
             has_image = False
-            if uploaded_file is not None:
-                image_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
-                with open(image_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+            
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    image_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
+                    with open(image_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    image_paths.append(image_path)
                 has_image = True
             
             if "records" not in st.session_state:
@@ -86,11 +89,15 @@ with st.form("entry_form", clear_on_submit=True):
                 
             st.session_state.records.append({
                 "name": name,
-                 "date": str(date), 
+                "date": str(date),
                 "note": note,
-                "image_path": image_path,
+                "image_path": image_paths[0] if image_paths else None, # Geriye dönük uyumluluk için
+                "image_paths": image_paths, # Tüm resimlerin listesi
                 "has_image": has_image
             })
+            st.success(f"'{name}' başarıyla kaydedildi!")
+        else:
+            st.warning("Lütfen İsim ve Not alanlarını doldurun.")
             st.success(f"'{name}' başarıyla kaydedildi!")
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
