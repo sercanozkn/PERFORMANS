@@ -54,7 +54,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 st.title("📝 Kişi ve Not Yönetim Sistemi")
-st.write("Bu program ile isim, not, çoklu resim kaydedebilir; resimleri büyütebilir, kayıtları silebilir, düzenleyebilir ve grafik analizi yapabilirsiniz.")
+st.write("Bu program ile isim, not, çoklu resim kaydedebilir; resimlere tıklayarak büyütebilir, X ile kapatabilir, kayıtları düzenleyebilir ve grafik analizi yapabilirsiniz.")
 
 # --- KULLANICI AYARLARI ---
 with st.sidebar.expander("⚙️ Hesap Ayarları"):
@@ -75,14 +75,18 @@ if st.sidebar.button("Çıkış Yap"):
 
 st.markdown("---")
 
-# --- BÜYÜTÜLEN RESİM ÖNİZLEME PENCERESİ ---
+# --- BÜYÜTÜLEN RESİM İÇİN X (ÇARPI) İLE KAPATMA PENCERESİ ---
 if st.session_state.zoomed_image:
-    st.markdown("### 🔍 Resim Büyük Önizleme")
+    col_z1, col_z2 = st.columns([8, 1])
+    with col_z1:
+        st.markdown("### 🔍 Resim Önizleme")
+    with col_z2:
+        if st.button("❌ Kapat", key="close_zoom"):
+            st.session_state.zoomed_image = None
+            st.rerun()
+            
     if os.path.exists(st.session_state.zoomed_image):
         st.image(st.session_state.zoomed_image, use_column_width=True)
-    if st.button("Küçült / Kapat"):
-        st.session_state.zoomed_image = None
-        st.rerun()
     st.markdown("---")
 
 # --- DÜZENLEME VEYA YENİ KAYIT FORMU ---
@@ -92,29 +96,29 @@ if st.session_state.edit_index is not None:
     
     st.subheader(f"✏️ '{current_record['name']}' Kaydını Düzenle")
     
-    with st.form("edit_form"):
-        edit_name = st.text_input("İsim:", value=current_record.get("name", ""))
-        try:
-            default_date = pd.to_datetime(current_record.get("date")).date()
-        except:
-            default_date = pd.Timestamp.today().date()
-            
-        edit_date = st.date_input("Tarih:", value=default_date, format="DD/MM/YYYY")
-        edit_note = st.text_area("Not:", value=current_record.get("note", ""))
+    # Form dışında metin/tarih alanları ile güvenli veri tutma (düzenleme hatasını çözer)
+    edit_name = st.text_input("İsim:", value=current_record.get("name", ""))
+    
+    try:
+        default_date = pd.to_datetime(current_record.get("date")).date()
+    except:
+        default_date = pd.Timestamp.today().date()
         
-        existing_paths = current_record.get("image_paths", [])
-        if not existing_paths and current_record.get("image_path"):
-            existing_paths = [current_record["image_path"]]
-            
-        edit_uploaded_files = st.file_uploader("Ekstra Yeni Resimler Ekle (İsteğe Bağlı)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    edit_date = st.date_input("Tarih:", value=default_date, format="DD/MM/YYYY")
+    edit_note = st.text_area("Not:", value=current_record.get("note", ""))
+    
+    existing_paths = current_record.get("image_paths", [])
+    if not existing_paths and current_record.get("image_path"):
+        existing_paths = [current_record["image_path"]]
         
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            update_button = st.form_submit_button(label="Değişiklikleri Kaydet")
-        with col_f2:
-            cancel_button = st.form_submit_button(label="İptal")
-            
-        if update_button:
+    if existing_paths:
+        st.write(f"Mevcut Yüklü Resim Sayısı: {len(existing_paths)}")
+        
+    edit_uploaded_files = st.file_uploader("Ekstra Yeni Resimler Ekle (İsteğe Bağlı)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+    
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        if st.button("Değişiklikleri Kaydet", key="save_edit_btn"):
             if edit_name and edit_note:
                 image_paths = list(existing_paths)
                 if edit_uploaded_files:
@@ -139,8 +143,8 @@ if st.session_state.edit_index is not None:
                 st.rerun()
             else:
                 st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
-                
-        if cancel_button:
+    with col_f2:
+        if st.button("İptal", key="cancel_edit_btn"):
             st.session_state.edit_index = None
             st.rerun()
             
