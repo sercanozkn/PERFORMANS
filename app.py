@@ -7,28 +7,28 @@ import json
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- GOOGLE SHEETS CSV BAĞLANTISI ---
-GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQZHf1mu-iVfmFbqXvGH71v1tdY8WLuYb8uVwjURsLDuniZGH7JAIoNJD7v6WR24CKi4lcUE-Mp5CBv/pub?gid=0&single=true&output=csv"
+DATA_FILE = "veriler.json"
+UPLOAD_DIR = "uploaded_images"
 
-def load_records_from_cloud():
-    if not GOOGLE_SHEET_CSV_URL:
-        return []
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# --- VERİLERİ YÜKLEME VE KAYDETME FONKSİYONLARI ---
+def load_records():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_records(records):
     try:
-        df = pd.read_csv(GOOGLE_SHEET_CSV_URL)
-        records = []
-        for _, row in df.iterrows():
-            img_paths = json.loads(str(row["image_paths"])) if pd.notna(row["image_paths"]) else []
-            records.append({
-                "name": str(row["name"]),
-                "date": str(row["date"]),
-                "note": str(row["note"]),
-                "image_path": img_paths[0] if img_paths else None,
-                "image_paths": img_paths,
-                "has_image": len(img_paths) > 0
-            })
-        return records
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(records, f, ensure_ascii=False, indent=4)
     except Exception as e:
-        return []
+        st.error(f"Veriler kaydedilirken hata oluştu: {e}")
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -41,7 +41,7 @@ if "password" not in st.session_state:
     st.session_state.password = "1234"
 
 if "records" not in st.session_state:
-    st.session_state.records = load_records_from_cloud()
+    st.session_state.records = load_records()
 
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
@@ -73,11 +73,7 @@ if not check_password():
     st.stop()
 
 # --- ANA UYGULAMA ---
-UPLOAD_DIR = "uploaded_images"
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-
-st.title("📄 Notes - Hata Takip Paneli (Bulut Senkronize)")
+st.title("📄 Notes - Hata Takip Paneli (Kalıcı Bellek)")
 st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
@@ -158,11 +154,12 @@ if st.session_state.edit_index is not None:
                         "image_paths": image_paths,
                         "has_image": len(image_paths) > 0
                     }
+                    save_records(st.session_state.records)
                     st.session_state.edit_index = None
                     st.success("Kayıt güncellendi!")
                     st.rerun()
                 else:
-                    st.warning("Lütfen İsim dan Not alanlarını boş bırakmayın.")
+                    st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
                     
             if cancel_button:
                 st.session_state.edit_index = None
@@ -198,6 +195,7 @@ with st.form("entry_form", clear_on_submit=True):
                 "has_image": len(image_paths) > 0
             })
             
+            save_records(st.session_state.records)
             st.success(f"'{name}' başarıyla eklendi!")
             st.rerun()
         else:
@@ -272,6 +270,7 @@ if st.session_state.records:
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
+                save_records(st.session_state.records)
                 st.rerun()
                 
         st.markdown("---")
