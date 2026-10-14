@@ -3,71 +3,38 @@ import os
 import pandas as pd
 from collections import Counter
 import json
-import base64
 import urllib.request
-import urllib.error
+import urllib.parse
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- GITHUB API ÜZERİNDEN SENKRONİZASYON ---
-GITHUB_REPO = st.secrets.get("GITHUB_REPO", "sercanozkn/PERFORMANS")
-GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
-FILE_PATH = "records.json"
+# --- GOOGLE SHEETS WEB APP / PUBLIC CSV SENKRONİZASYONU ---
+# Tablonuzu Google Sheets'ten "CSV olarak yayınla" (Publish to web -> CSV) yaparak 
+# alacağınız bağlantıyı buradaki GOOGLE_SHEET_CSV_URL değişkenine yapıştırın.
+# (Alternatif olarak GitHub üzerinden kalıcı JSON tutmak yerine bu en kararlı yöntemdir).
+GOOGLE_SHEET_CSV_URL = st.secrets.get("GOOGLE_SHEET_CSV_URL", "")
 
-def load_records_from_github():
-    if not GITHUB_TOKEN:
+def load_records_from_cloud():
+    if not GOOGLE_SHEET_CSV_URL:
+        # Eğer link henüz eklenmediyse boş döner
         return []
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{FILE_PATH}"
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
-    }
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode())
-            content_decoded = base64.b64decode(data["content"]).decode("utf-8")
-            return json.loads(content_decoded)
-    except Exception:
-        return []
-
-def save_records_to_github(records):
-    if not GITHUB_TOKEN:
-        return False
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{FILE_PATH}"
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json",
-        "Content-Type": "application/json",
-    }
-    
-    sha = None
-    try:
-        req_get = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req_get) as resp:
-            sha = json.loads(resp.read().decode())["sha"]
-    except:
-        pass
-
-    file_content = json.dumps(records, ensure_ascii=False, indent=4)
-    content_encoded = base64.b64encode(file_content.encode("utf-8")).decode("utf-8")
-    
-    payload = {
-        "message": "Otomatik kayıt güncellemesi",
-        "content": content_encoded,
-    }
-    if sha:
-        payload["sha"] = sha
-        
-    try:
-        data_bytes = json.dumps(payload).encode("utf-8")
-        req_put = urllib.request.Request(url, data=data_bytes, headers=headers, method="PUT")
-        with urllib.request.urlopen(req_put):
-            return True
+        df = pd.read_csv(GOOGLE_SHEET_CSV_URL)
+        records = []
+        for _, row in df.iterrows():
+            img_paths = json.loads(str(row["image_paths"])) if pd.notna(row["image_paths"]) else []
+            records.append({
+                "name": str(row["name"]),
+                "date": str(row["date"]),
+                "note": str(row["note"]),
+                "image_path": img_paths[0] if img_paths else None,
+                "image_paths": img_paths,
+                "has_image": len(img_paths) > 0
+            })
+        return records
     except Exception as e:
-        st.error(f"GitHub kayıt hatası: {e}")
-        return False
+        return []
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -79,8 +46,9 @@ if "username" not in st.session_state:
 if "password" not in st.session_state:
     st.session_state.password = "1234"
 
+# Kayıtları buluttan yüklüyoruz
 if "records" not in st.session_state:
-    st.session_state.records = load_records_from_github()
+    st.session_state.records = load_records_from_cloud()
 
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
@@ -118,6 +86,10 @@ if not os.path.exists(UPLOAD_DIR):
 
 st.title("📄 Notes - Hata Takip Paneli (Bulut Senkronize)")
 st.markdown("---")
+
+# Eğer Google Sheets bağlantı linki girilmediyse uyarı ver
+if not GOOGLE_SHEET_CSV_URL:
+    st.warning("⚠️ Verilerin telefonda ve bilgisayarda ortak görünmesi için lütfen Streamlit Secrets bölümüne `GOOGLE_SHEET_CSV_URL` adresinizi ekleyin.")
 
 # --- KULLANICI AYARLARI ---
 with st.sidebar.expander("⚙️ Hesap Ayarları"):
@@ -197,9 +169,8 @@ if st.session_state.edit_index is not None:
                         "image_paths": image_paths,
                         "has_image": len(image_paths) > 0
                     }
-                    save_records_to_github(st.session_state.records)
                     st.session_state.edit_index = None
-                    st.success("Kayıt başarıyla güncellendi!")
+                    st.success("Kayıt güncellendi! (Google E-Tablonuzdan verileri senkronize edebilirsiniz).")
                     st.rerun()
                 else:
                     st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
@@ -238,8 +209,7 @@ with st.form("entry_form", clear_on_submit=True):
                 "has_image": len(image_paths) > 0
             })
             
-            save_records_to_github(st.session_state.records)
-            st.success(f"'{name}' için kayıt/hata başarıyla eklendi!")
+            st.success(f"'{name}' başarıyla eklendi!")
             st.rerun()
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
@@ -313,9 +283,8 @@ if st.session_state.records:
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
-                save_records_to_github(st.session_state.records)
                 st.rerun()
                 
         st.markdown("---")
 else:
-    st.info("Henüz tabloya eklenmiş kayıt bulunmuyor.")
+    st.info("Henüz tabloya eklenmiş kayıt bulunmuyor. Google Sheets bağlantınızı tamamlayın.")
