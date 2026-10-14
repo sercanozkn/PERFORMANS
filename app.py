@@ -4,7 +4,7 @@ import pandas as pd
 from collections import Counter
 
 # --- SAYFA AYARI ---
-st.set_page_config(page_title="Notes - Kişi ve Not Yönetimi", layout="wide")
+st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -54,7 +54,7 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 # Notion Tarzı Üst Başlık
-st.title("📄 Notes")
+st.title("📄 Notes - Hata Takip Paneli")
 st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
@@ -95,7 +95,7 @@ if st.session_state.edit_index is not None:
         current_record = st.session_state.records[idx]
         
         st.markdown(f"### 📂 Ayrıntı ve Düzenleme Ekranı: {current_record['name']}")
-        st.info("Bu alanda seçilen kişinin notlarını inceleyebilir ve güncellemeler yapabilirsiniz.")
+        st.info("Bu alanda seçilen kişinin kayıtlarını/hatalarını inceleyebilir ve güncelleyebilirsiniz.")
         
         with st.form("open_detail_edit_form"):
             edit_name = st.text_input("Text (İsim):", value=current_record.get("name", ""))
@@ -108,7 +108,6 @@ if st.session_state.edit_index is not None:
             edit_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY")
             edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
             
-            # Mevcut resimleri göster ve yönet
             existing_paths = current_record.get("image_paths", [])
             if not existing_paths and current_record.get("image_path"):
                 existing_paths = [current_record["image_path"]]
@@ -148,16 +147,16 @@ if st.session_state.edit_index is not None:
                     st.success("Kayıt başarıyla güncellendi!")
                     st.rerun()
                 else:
-                    st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
+                    st.warning("Lütfen İsim dan Not alanlarını boş bırakmayın.")
                     
             if cancel_button:
                 st.session_state.edit_index = None
                 st.rerun()
         st.markdown("---")
 
-# --- YENİ KAYIT EKLEME FORMU ---
+# --- YENİ KAYIT (HATA) EKLEME FORMU ---
 with st.form("entry_form", clear_on_submit=True):
-    st.subheader("➕ Yeni Not / Kayıt Ekle")
+    st.subheader("➕ Yeni Kayıt / Hata Ekle")
     name = st.text_input("Text (İsim):")
     date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
     note = st.text_area("Not / Açıklama:")
@@ -189,46 +188,35 @@ with st.form("entry_form", clear_on_submit=True):
                 "image_paths": image_paths,
                 "has_image": has_image
             })
-            st.success(f"'{name}' başarıyla eklendi!")
+            st.success(f"'{name}' için kayıt/hata başarıyla eklendi!")
             st.rerun()
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- GRAFİKLER BÖLÜMÜ ---
+# --- HATA ANALİZİ VE GRAFİK PANELİ ---
 if "records" in st.session_state and st.session_state.records:
     st.markdown("---")
-    st.subheader("📊 İstatistik ve Grafik Paneli")
+    st.subheader("📊 Hata Analizi ve İstatistik Paneli")
     
-    resimli_records = [r for r in st.session_state.records if r["has_image"]]
-    resimsiz_records = [r for r in st.session_state.records if not r["has_image"]]
+    all_names = [r["name"] for r in st.session_state.records]
+    df_errors = pd.DataFrame(list(Counter(all_names).items()), columns=["İsim", "Hata (Kayıt) Sayısı"])
     
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        st.markdown("### 🖼️ Resimli Kayıtlar Dağılımı")
-        if resimli_records:
-            img_names = [r["name"] for r in resimli_records]
-            df_img = pd.DataFrame(list(Counter(img_names).items()), columns=["İsim", "Tekrar Sayısı"])
-            df_img = df_img.sort_values(by="Tekrar Sayısı", ascending=False).set_index("İsim")
-            st.bar_chart(df_img)
-        else:
-            st.info("Resimli kayıt yok.")
+        st.markdown("### 🔴 En Çok Hata Yapanlar (Çoktan Aza)")
+        df_max = df_errors.sort_values(by="Hata (Kayıt) Sayısı", ascending=False).set_index("İsim")
+        st.bar_chart(df_max)
             
     with col_g2:
-        st.markdown("### 📄 Resimsiz Kayıtlar Dağılımı")
-        if resimsiz_records:
-            no_img_names = [r["name"] for r in resimsiz_records]
-            df_no_img = pd.DataFrame(list(Counter(no_img_names).items()), columns=["İsim", "Tekrar Sayısı"])
-            df_no_img = df_no_img.sort_values(by="Tekrar Sayısı", ascending=False).set_index("İsim")
-            st.bar_chart(df_no_img)
-        else:
-            st.info("Resimsiz kayıt yok.")
+        st.markdown("### 🟢 En Az Hata Yapanlar (Azdan Çoka)")
+        df_min = df_errors.sort_values(by="Hata (Kayıt) Sayısı", ascending=True).set_index("İsim")
+        st.bar_chart(df_min)
 
 # --- NOTION TARZI TABLO VE SATIR GÖRÜNÜMÜ ---
 st.markdown("---")
-st.subheader("📋 All notes (Kayıt Tablosu)")
+st.subheader("📋 All notes (Kayıt ve Hata Tablosu)")
 
 if "records" in st.session_state and st.session_state.records:
-    # Tablo Başlıkları
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
     with header_col1:
         st.markdown("**İşlem (OPEN)**")
@@ -245,13 +233,11 @@ if "records" in st.session_state and st.session_state.records:
     for idx, record in enumerate(st.session_state.records):
         row_col1, row_col2, row_col3, row_col4, row_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
         
-        # 1. OPEN Butonu
         with row_col1:
             if st.button("OPEN", key=f"open_{idx}"):
                 st.session_state.edit_index = idx
                 st.rerun()
                 
-        # 2. Files & media (Resimler Yan Yana Küçük Kareler)
         with row_col2:
             paths = record.get("image_paths", [])
             if not paths and record.get("image_path"):
@@ -270,16 +256,13 @@ if "records" in st.session_state and st.session_state.records:
             else:
                 st.write("-")
                 
-        # 3. Text (İsim ve Not)
         with row_col3:
             st.markdown(f"**{record['name']}**")
             st.caption(f"{record['note']}")
             
-        # 4. Date
         with row_col4:
             st.write(record['date'])
             
-        # 5. Sil Butonu
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
