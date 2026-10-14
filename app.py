@@ -74,7 +74,7 @@ if st.sidebar.button("Çıkış Yap"):
     st.session_state.authenticated = False
     st.rerun()
 
-# --- BÜYÜTÜLEN RESİM İÇİN X (ÇARPI) İLE KAPATMA PENCERESİ ---
+# --- BÜYÜTÜLEN RESİM İÇİN X İLE KAPATMA PENCERESİ ---
 if st.session_state.zoomed_image:
     col_z1, col_z2 = st.columns([10, 1])
     with col_z1:
@@ -88,72 +88,72 @@ if st.session_state.zoomed_image:
         st.image(st.session_state.zoomed_image, use_column_width=True)
     st.markdown("---")
 
-# --- EĞER BİR KAYDA "OPEN" DENİLDİYSE DETAY VE DÜZENLEME PANELİ ---
+# --- OPEN BUTONUNA BASILINCA AÇILAN DETAY VE DÜZENLEME PANELİ ---
 if st.session_state.edit_index is not None:
     idx = st.session_state.edit_index
-    current_record = st.session_state.records[idx]
-    
-    st.markdown(f"### 📂 Kayıt Detayı ve Düzenleme (OPEN Mode)")
-    st.info(f"Şu an '{current_record['name']}' adlı kaydı görüntülüyorsunuz. Aşağıdan bilgileri güncelleyebilirsiniz.")
-    
-    with st.form("open_edit_form"):
-        edit_name = st.text_input("Text (İsim):", value=current_record.get("name", ""))
+    if idx < len(st.session_state.records):
+        current_record = st.session_state.records[idx]
         
-        try:
-            default_date = pd.to_datetime(current_record.get("date")).date()
-        except:
-            default_date = pd.Timestamp.today().date()
-            
-        edit_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY")
-        edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
+        st.markdown(f"### 📂 Ayrıntı ve Düzenleme Ekranı: {current_record['name']}")
+        st.info("Bu alanda seçilen kişinin notlarını inceleyebilir ve güncellemeler yapabilirsiniz.")
         
-        # Mevcut resimleri listele
-        existing_paths = current_record.get("image_paths", [])
-        if not existing_paths and current_record.get("image_path"):
-            existing_paths = [current_record["image_path"]]
+        with st.form("open_detail_edit_form"):
+            edit_name = st.text_input("Text (İsim):", value=current_record.get("name", ""))
             
-        if existing_paths:
-            st.write(f"Mevcut Yüklü Resim Sayısı: {len(existing_paths)}")
-            
-        edit_uploaded_files = st.file_uploader("Files & media (Ekstra Yeni Resimler Ekle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-        
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            update_button = st.form_submit_button(label="Değişiklikleri Kaydet")
-        with col_f2:
-            cancel_button = st.form_submit_button(label="Kapat / Geri Dön")
-            
-        if update_button:
-            if edit_name and edit_note:
-                image_paths = list(existing_paths)
-                if edit_uploaded_files:
-                    for uf in edit_uploaded_files:
-                        img_path = os.path.join(UPLOAD_DIR, uf.name)
-                        with open(img_path, "wb") as f:
-                            f.write(uf.getbuffer())
-                        if img_path not in image_paths:
-                            image_paths.append(img_path)
+            try:
+                default_date = pd.to_datetime(current_record.get("date")).date()
+            except:
+                default_date = pd.Timestamp.today().date()
                 
-                has_img = len(image_paths) > 0
-                st.session_state.records[idx] = {
-                    "name": edit_name,
-                    "date": str(edit_date),
-                    "note": edit_note,
-                    "image_path": image_paths[0] if image_paths else None,
-                    "image_paths": image_paths,
-                    "has_image": has_img
-                }
+            edit_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY")
+            edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
+            
+            # Mevcut resimleri göster ve yönet
+            existing_paths = current_record.get("image_paths", [])
+            if not existing_paths and current_record.get("image_path"):
+                existing_paths = [current_record["image_path"]]
+                
+            if existing_paths:
+                st.write(f"Mevcut Yüklü Resim Sayısı: {len(existing_paths)}")
+                
+            edit_uploaded_files = st.file_uploader("Files & media (Ekstra Yeni Resimler Ekle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+            
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                update_button = st.form_submit_button(label="Değişiklikleri Kaydet")
+            with col_f2:
+                cancel_button = st.form_submit_button(label="Kapat / Geri Dön")
+                
+            if update_button:
+                if edit_name and edit_note:
+                    image_paths = list(existing_paths)
+                    if edit_uploaded_files:
+                        for uf in edit_uploaded_files:
+                            img_path = os.path.join(UPLOAD_DIR, uf.name)
+                            with open(img_path, "wb") as f:
+                                f.write(uf.getbuffer())
+                            if img_path not in image_paths:
+                                image_paths.append(img_path)
+                    
+                    has_img = len(image_paths) > 0
+                    st.session_state.records[idx] = {
+                        "name": edit_name,
+                        "date": str(edit_date),
+                        "note": edit_note,
+                        "image_path": image_paths[0] if image_paths else None,
+                        "image_paths": image_paths,
+                        "has_image": has_img
+                    }
+                    st.session_state.edit_index = None
+                    st.success("Kayıt başarıyla güncellendi!")
+                    st.rerun()
+                else:
+                    st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
+                    
+            if cancel_button:
                 st.session_state.edit_index = None
-                st.success("Kayıt başarıyla güncellendi!")
                 st.rerun()
-            else:
-                st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
-                
-        if cancel_button:
-            st.session_state.edit_index = None
-            st.rerun()
-            
-    st.markdown("---")
+        st.markdown("---")
 
 # --- YENİ KAYIT EKLEME FORMU ---
 with st.form("entry_form", clear_on_submit=True):
