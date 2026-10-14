@@ -91,17 +91,13 @@ with st.form("entry_form", clear_on_submit=True):
                 "name": name,
                 "date": str(date),
                 "note": note,
-                "image_path": image_paths[0] if image_paths else None, # Geriye dönük uyumluluk için
-                "image_paths": image_paths, # Tüm resimlerin listesi
+                "image_path": image_paths[0] if image_paths else None,
+                "image_paths": image_paths,
                 "has_image": has_image
             })
             st.success(f"'{name}' başarıyla kaydedildi!")
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
-            st.success(f"'{name}' başarıyla kaydedildi!")
-        else:
-            st.warning("Lütfen İsim ve Not alanlarını doldurun.")
-
 # --- GRAFİKLER BÖLÜMÜ ---
 if "records" in st.session_state and st.session_state.records:
     st.markdown("---")
