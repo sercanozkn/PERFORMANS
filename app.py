@@ -8,23 +8,31 @@ from datetime import datetime
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- GOOGLE SHEETS CSV BAĞLANTISI ---
+# Google E-Tablo CSV Bağlantısı (Okuma için)
 GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQZHf1mu-iVfmFbqXvGH71v1tdY8WLuYb8uVwjURsLDuniZGH7JAIoNJD7v6WR24CKi4lcUE-Mp5CBv/pub?gid=0&single=true&output=csv"
-
 LOCAL_BACKUP_FILE = "veriler.json"
 UPLOAD_DIR = "uploaded_images"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-def load_records_from_cloud():
+def load_records():
     records = []
-    # Önce Google Sheets'ten okumayı dene
-    if GOOGLE_SHEET_CSV_URL:
+    # 1. Önce GitHub üzerindeki kalıcı yedek dosyasından oku (En güncel ve kalıcı yer)
+    if os.path.exists(LOCAL_BACKUP_FILE):
+        try:
+            with open(LOCAL_BACKUP_FILE, "r", encoding="utf-8") as f:
+                records = json.load(f)
+                if records:
+                    return records
+        except Exception:
+            pass
+
+    # 2. Eğer yerel dosya boşsa Google E-Tablodan ilk verileri çek
+    if not records and GOOGLE_SHEET_CSV_URL:
         try:
             df = pd.read_csv(GOOGLE_SHEET_CSV_URL)
             for _, row in df.iterrows():
-                # Google Sheets boş satırları veya eksik sütunları kontrol et
                 if pd.notna(row.get("name")) and str(row.get("name")).strip() != "":
                     img_paths = json.loads(str(row["image_paths"])) if pd.notna(row.get("image_paths")) else []
                     records.append({
@@ -36,27 +44,20 @@ def load_records_from_cloud():
                         "has_image": len(img_paths) > 0
                     })
             if records:
-                return records
+                save_records(records)
         except Exception:
             pass
             
-    # Eğer cloud yüklenemezse veya boşsa yerel yedeğe bak
-    if os.path.exists(LOCAL_BACKUP_FILE):
-        try:
-            with open(LOCAL_BACKUP_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    return records
 
-def save_local_backup(records):
+def save_records(records):
     try:
         with open(LOCAL_BACKUP_FILE, "w", encoding="utf-8") as f:
             json.dump(records, f, ensure_ascii=False, indent=4)
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"Kayıt saklanırken hata oluştu: {e}")
 
-# --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
+# --- OTURUM (SESSION STATE) ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -67,7 +68,7 @@ if "password" not in st.session_state:
     st.session_state.password = "1234"
 
 if "records" not in st.session_state:
-    st.session_state.records = load_records_from_cloud()
+    st.session_state.records = load_records()
 
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
@@ -75,7 +76,7 @@ if "edit_index" not in st.session_state:
 if "zoomed_image" not in st.session_state:
     st.session_state.zoomed_image = None
 
-# --- KULLANICI GİRİŞ FONKSİYONU ---
+# --- KULLANICI GİRİŞİ ---
 def check_password():
     if not st.session_state.authenticated:
         st.title("🔒 Giriş Yap")
@@ -88,7 +89,7 @@ def check_password():
             if submit:
                 if username == st.session_state.username and password == st.session_state.password:
                     st.session_state.authenticated = True
-                    st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
+                    st.success("Giriş başarılı!")
                     st.rerun()
                 else:
                     st.error("Kullanıcı adı veya şifre hatalı!")
@@ -99,7 +100,7 @@ if not check_password():
     st.stop()
 
 # --- ANA UYGULAMA ---
-st.title("📄 Notes - Hata Takip Paneli (Bulut Senkronize)")
+st.title("📄 Notes - Hata Takip Paneli (Ömür Boyu Kalıcı)")
 st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
@@ -111,7 +112,7 @@ with st.sidebar.expander("⚙️ Hesap Ayarları"):
         st.session_state.username = yeni_kullanici
         if yeni_sifre:
             st.session_state.password = yeni_sifre
-        st.success("Bilgiler güncellendi! Lütfen yeniden giriş yapın.")
+        st.success("Bilgiler güncellendi!")
         st.session_state.authenticated = False
         st.rerun()
 
@@ -139,7 +140,7 @@ if st.session_state.edit_index is not None:
     if idx < len(st.session_state.records):
         current_record = st.session_state.records[idx]
         
-        st.markdown(f"### 📂 Ayrıntı ve Düzenleme Ekranı: {current_record['name']}")
+        st.markdown(f"### 📂 Düzenleme Ekranı: {current_record['name']}")
         
         with st.form("open_detail_edit_form"):
             edit_name = st.text_input("Text (İsim):", value=current_record.get("name", ""))
@@ -153,13 +154,13 @@ if st.session_state.edit_index is not None:
             edit_note = st.text_area("Not / İçerik:", value=current_record.get("note", ""))
             
             existing_paths = current_record.get("image_paths", [])
-            edit_uploaded_files = st.file_uploader("Files & media (Ekstra Yeni Resimler Ekle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+            edit_uploaded_files = st.file_uploader("Ekstra Yeni Resimler Ekle:", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
             
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 update_button = st.form_submit_button(label="Değişiklikleri Kaydet")
             with col_f2:
-                cancel_button = st.form_submit_button(label="Kapat / Geri Dön")
+                cancel_button = st.form_submit_button(label="İptal / Geri Dön")
                 
             if update_button:
                 if edit_name and edit_note:
@@ -180,12 +181,12 @@ if st.session_state.edit_index is not None:
                         "image_paths": image_paths,
                         "has_image": len(image_paths) > 0
                     }
-                    save_local_backup(st.session_state.records)
+                    save_records(st.session_state.records)
                     st.session_state.edit_index = None
                     st.success("Kayıt güncellendi!")
                     st.rerun()
                 else:
-                    st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
+                    st.warning("Lütfen İsim ve Not alanlarını doldurun.")
                     
             if cancel_button:
                 st.session_state.edit_index = None
@@ -221,8 +222,8 @@ with st.form("entry_form", clear_on_submit=True):
                 "has_image": len(image_paths) > 0
             })
             
-            save_local_backup(st.session_state.records)
-            st.success(f"'{name}' başarıyla eklendi!")
+            save_records(st.session_state.records)
+            st.success(f"'{name}' başarıyla eklendi ve kalıcı olarak kaydedildi!")
             st.rerun()
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
@@ -296,18 +297,9 @@ if st.session_state.records:
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
-                save_local_backup(st.session_state.records)
+                save_records(st.session_state.records)
                 st.rerun()
                 
         st.markdown("---")
 else:
     st.info("Henüz tabloya eklenmiş kayıt bulunmuyor.")
-
-# Google Sheets'e yeni kayıt eklendiğinde tabloyu bilgilendiren rehber metin
-st.markdown("---")
-with st.expander("💡 Google E-Tablonuz ile Verileri Eşitlemek İçin Not"):
-    st.write("""
-    Eğer Google E-Tablonuza dışarıdan (Google Sheets üzerinden doğrudan) yeni veriler eklemek isterseniz, 
-    tablonuzun ilk satırındaki sütun isimlerinin tam olarak şu şekilde olmasına dikkat edin:
-    `name`, `date`, `note`, `image_paths`
-    """)
