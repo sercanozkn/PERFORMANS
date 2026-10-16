@@ -8,8 +8,8 @@ from datetime import datetime
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# Google E-Tablo CSV Bağlantısı (Okuma için)
-GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQZHf1mu-iVfmFbqXvGH71v1tdY8WLuYb8uVwjURsLDuniZGH7JAIoNJD7v6WR24CKi4lcUE-Mp5CBv/pub?gid=0&single=true&output=csv"
+# Google E-Tablo'nuzun güncel ve doğru CSV bağlantısı
+GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHNNwtqn1BMBzHroc9AoPoTR5Kep2phX_5wCF_b3_KXW9LPExN697s84WoMGCeddK6IxuwCPSY7gX/pub?gid=0&single=true&output=csv"
 LOCAL_BACKUP_FILE = "veriler.json"
 UPLOAD_DIR = "uploaded_images"
 
@@ -18,7 +18,7 @@ if not os.path.exists(UPLOAD_DIR):
 
 def load_records():
     records = []
-    # 1. Önce GitHub üzerindeki kalıcı yedek dosyasından oku (En güncel ve kalıcı yer)
+    # 1. Önce GitHub/Sunucu üzerindeki kalıcı yedek dosyasından oku
     if os.path.exists(LOCAL_BACKUP_FILE):
         try:
             with open(LOCAL_BACKUP_FILE, "r", encoding="utf-8") as f:
@@ -28,7 +28,7 @@ def load_records():
         except Exception:
             pass
 
-    # 2. Eğer yerel dosya boşsa Google E-Tablodan ilk verileri çek
+    # 2. Yerel dosya boşsa doğrudan Google E-Tablo CSV'sinden ilk verileri çek
     if not records and GOOGLE_SHEET_CSV_URL:
         try:
             df = pd.read_csv(GOOGLE_SHEET_CSV_URL)
