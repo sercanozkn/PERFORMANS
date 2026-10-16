@@ -8,17 +8,33 @@ from datetime import datetime
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# Google E-Tablo'nuzun güncel ve doğru CSV bağlantısı
 GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSHNNwtqn1BMBzHroc9AoPoTR5Kep2phX_5wCF_b3_KXW9LPExN697s84WoMGCeddK6IxuwCPSY7gX/pub?gid=0&single=true&output=csv"
 LOCAL_BACKUP_FILE = "veriler.json"
+CONFIG_FILE = "config.json"
 UPLOAD_DIR = "uploaded_images"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
+# --- AYARLARI VE ŞİFREYİ YÜKLEME / KAYDETME ---
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"username": "admin", "password": "1234"}
+
+def save_config(username, password):
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"username": username, "password": password}, f, ensure_ascii=False, indent=4)
+    except Exception:
+        pass
+
 def load_records():
     records = []
-    # 1. Önce GitHub/Sunucu üzerindeki kalıcı yedek dosyasından oku
     if os.path.exists(LOCAL_BACKUP_FILE):
         try:
             with open(LOCAL_BACKUP_FILE, "r", encoding="utf-8") as f:
@@ -28,7 +44,6 @@ def load_records():
         except Exception:
             pass
 
-    # 2. Yerel dosya boşsa doğrudan Google E-Tablo CSV'sinden ilk verileri çek
     if not records and GOOGLE_SHEET_CSV_URL:
         try:
             df = pd.read_csv(GOOGLE_SHEET_CSV_URL)
@@ -58,14 +73,16 @@ def save_records(records):
         st.error(f"Kayıt saklanırken hata oluştu: {e}")
 
 # --- OTURUM (SESSION STATE) ---
+config = load_config()
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if "username" not in st.session_state:
-    st.session_state.username = "admin"
+    st.session_state.username = config["username"]
 
 if "password" not in st.session_state:
-    st.session_state.password = "1234"
+    st.session_state.password = config["password"]
 
 if "records" not in st.session_state:
     st.session_state.records = load_records()
@@ -78,6 +95,9 @@ if "zoomed_image" not in st.session_state:
 
 # --- KULLANICI GİRİŞİ ---
 def check_password():
+    # Güncel şifreyi dosyadan tekrar kontrol et
+    current_config = load_config()
+    
     if not st.session_state.authenticated:
         st.title("🔒 Giriş Yap")
         st.write("Lütfen devam etmek için kullanıcı adı ve şifrenizi girin.")
@@ -87,7 +107,7 @@ def check_password():
             password = st.text_input("Şifre:", type="password")
             submit = st.form_submit_button("Giriş Yap")
             if submit:
-                if username == st.session_state.username and password == st.session_state.password:
+                if username == current_config["username"] and password == current_config["password"]:
                     st.session_state.authenticated = True
                     st.success("Giriş başarılı!")
                     st.rerun()
@@ -105,14 +125,19 @@ st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
 with st.sidebar.expander("⚙️ Hesap Ayarları"):
-    yeni_kullanici = st.text_input("Yeni Kullanıcı Adı", value=st.session_state.username)
+    current_config = load_config()
+    yeni_kullanici = st.text_input("Yeni Kullanıcı Adı", value=current_config["username"])
     yeni_sifre = st.text_input("Yeni Şifre", type="password")
     
     if st.button("Bilgileri Güncelle"):
-        st.session_state.username = yeni_kullanici
-        if yeni_sifre:
-            st.session_state.password = yeni_sifre
-        st.success("Bilgiler güncellendi!")
+        hedef_kullanici = yeni_kullanici if yeni_kullanici else current_config["username"]
+        hedef_sifre = yeni_sifre if yeni_sifre else current_config["password"]
+        
+        save_config(hedef_kullanici, hedef_sifre)
+        st.session_state.username = hedef_kullanici
+        st.session_state.password = hedef_sifre
+        
+        st.success("Bilgiler kalıcı olarak güncellendi! Lütfen yeniden giriş yapın.")
         st.session_state.authenticated = False
         st.rerun()
 
@@ -269,7 +294,7 @@ if st.session_state.records:
         
         with row_col1:
             if st.button("OPEN", key=f"open_{idx}"):
-                st.session_state.edit_index = idx
+                st.session_date.edit_index = idx
                 st.rerun()
                 
         with row_col2:
