@@ -1,17 +1,87 @@
 import streamlit as st
 import os
 import json
+import base64
+import requests
 import pandas as pd
 from collections import Counter
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- KALICI VERİ DEPOLAMA DOSYALARI ---
+# --- GİTHUB API SENKRONİZASYON FONKSİYONLARI ---
 DATA_FILE = "records_data.json"
 CONFIG_FILE = "config_data.json"
 
+def get_github_secrets():
+    try:
+        token = st.secrets["GITHUB_TOKEN"]
+        repo = st.secrets["REPO_NAME"]
+        branch = st.secrets.get("BRANCH", "main")
+        return token, repo, branch
+    except:
+        return None, None, None
+
+def load_from_github(file_path):
+    token, repo, branch = get_github_secrets()
+    if not token or not repo:
+        return None
+    
+    url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    params = {"ref": branch}
+    
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code == 200:
+        file_content_encoded = response.json().get("content", "")
+        file_content_bytes = base64.b64decode(file_content_encoded)
+        return json.loads(file_content_bytes.decode("utf-8"))
+    return None
+
+def save_to_github(file_path, data_dict_or_list, commit_message):
+    token, repo, branch = get_github_secrets()
+    
+    # Her durumda yerel diske de yazalım (yedek olsun)
+    if isinstance(data_dict_or_list, list):
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data_dict_or_list, f, ensure_ascii=False, indent=4)
+    else:
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data_dict_or_list, f, ensure_ascii=False, indent=4)
+
+    if not token or not repo:
+        return  # Secrets tanımlı değilse sadece yerelde kalır
+        
+    url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    
+    # Mevcut dosyanın SHA değerini almalıyız (GitHub API güncelleme için SHA ister)
+    params = {"ref": branch}
+    sha = None
+    res = requests.get(url, headers=headers, params=params)
+    if res.status_code == 200:
+        sha = res.json().get("sha")
+        
+    # Veriyi base64 formatına çevir
+    json_str = json.dumps(data_dict_or_list, ensure_ascii=False, indent=4)
+    encoded_content = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
+    
+    payload = {
+        "message": commit_message,
+        "content": encoded_content,
+        "branch": branch
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    requests.put(url, headers=headers, json=payload)
+
+# --- VERİ VE AYARLARI YÜKLEME ---
 def load_records():
+    # Önce GitHub'dan çekmeyi dene, yoksa yerel dosyaya bak
+    gh_data = load_from_github(DATA_FILE)
+    if gh_data is not None:
+        return gh_data
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -20,11 +90,10 @@ def load_records():
             return []
     return []
 
-def save_records(records):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=4)
-
 def load_config():
+    gh_data = load_from_github(CONFIG_FILE)
+    if gh_data is not None:
+        return gh_data
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -32,10 +101,6 @@ def load_config():
         except:
             return {"username": "admin", "password": "1234"}
     return {"username": "admin", "password": "1234"}
-
-def save_config(username, password):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump({"username": username, "password": password}, f, ensure_ascii=False, indent=4)
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
@@ -98,7 +163,7 @@ with st.sidebar.expander("⚙️ Hesap Ayarları"):
     
     if st.button("Bilgileri Güncelle"):
         pass_to_save = yeni_sifre if yeni_sifre else current_config["password"]
-        save_config(yeni_kullanici, pass_to_save)
+        save_to_github(CONFIG_FILE, {"username": yeni_kullanici, "password": pass_to_save}, "Update config settings")
         st.session_state.username = yeni_kullanici
         st.session_state.password = pass_to_save
         st.success("Bilgiler kalıcı olarak güncellendi! Yeniden giriş yapın.")
@@ -178,9 +243,9 @@ if st.session_state.edit_index is not None:
                         "image_paths": image_paths,
                         "has_image": has_img
                     }
-                    save_records(st.session_state.records)
+                    save_to_github(DATA_FILE, st.session_state.records, f"Update record for {edit_name}")
                     st.session_state.edit_index = None
-                    st.success("Kayıt başarıyla güncellendi!")
+                    st.success("Kayıt başarıyla güncellendi ve GitHub'a kaydedildi!")
                     st.rerun()
                 else:
                     st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
@@ -224,14 +289,14 @@ with st.form("entry_form", clear_on_submit=True):
                 "image_paths": image_paths,
                 "has_image": has_image
             })
-            save_records(st.session_state.records)
-            st.success(f"'{name}' için kayıt/hata başarıyla eklendi!")
+            save_to_github(DATA_FILE, st.session_state.records, f"Add new record for {name}")
+            st.success(f"'{name}' için kayıt/hata başarıyla eklendi ve GitHub'a kaydedildi!")
             st.rerun()
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
 # --- HATA ANALİZİ, ORTALAMA HESABI VE GRAFİK PANELİ ---
-st.session_state.records = load_records() # Güncel verileri diskten oku
+st.session_state.records = load_records() # Güncel verileri GitHub/Diskten oku
 if st.session_state.records:
     st.markdown("---")
     st.subheader("📊 Hata Analizi ve Ortalama Paneli")
@@ -308,7 +373,7 @@ if st.session_state.records:
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
                 st.session_state.records.pop(idx)
-                save_records(st.session_state.records)
+                save_to_github(DATA_FILE, st.session_state.records, f"Delete record {idx}")
                 st.rerun()
                 
         st.markdown("---")
