@@ -176,3 +176,61 @@ if editing_record:
 
     col_up1, col_up2 = st.columns(2)
     with col_up1:
+        if st.button("💾 Değişiklikleri Kaydet", type="primary", use_container_width=True):
+            for r in records:
+                if r.get("id") == st.session_state.edit_id:
+                    r["name"] = e_name
+                    r["date"] = e_date.strftime("%d/%m/%Y")
+                    r["note"] = e_note
+                    
+                    if e_uploaded_files:
+                        new_img_paths = save_images(e_uploaded_files)
+                        r["image_paths"] = r.get("image_paths", []) + new_img_paths
+                        r["has_image"] = True
+                        
+            save_records(records)
+            st.session_state.edit_id = None
+            st.success("Kayıt başarıyla güncellendi!")
+            st.rerun()
+            
+    with col_up2:
+        if st.button("❌ İptal", use_container_width=True):
+            st.session_state.edit_id = None
+            st.rerun()
+
+else:
+    with st.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
+        with st.form("new_record_form", clear_on_submit=True):
+            name = st.text_input("Text (İsim):")
+            date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
+            note = st.text_area("Not / Açıklama:")
+            uploaded_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+            
+            submitted = st.form_submit_button("Tabloya Ekle", type="primary")
+            if submitted:
+                if name and note:
+                    image_paths = save_images(uploaded_files)
+                    
+                    new_id = int(datetime.now().timestamp() * 1000)
+                    new_item = {
+                        "id": new_id,
+                        "name": name,
+                        "date": date.strftime("%d/%m/%Y"),
+                        "note": note,
+                        "image_paths": image_paths,
+                        "has_image": bool(image_paths)
+                    }
+                    
+                    records.insert(0, new_item)
+                    save_records(records)
+                    st.success("Kayıt başarıyla eklendi!")
+                    st.rerun()
+                else:
+                    st.warning("Lütfen İsim ve Not alanlarını doldurun.")
+
+# --- PLOTLY İLE MODERN İSTATİSTİK / GRAFİK BÖLÜMÜ ---
+st.markdown("---")
+st.subheader("📊 İsimlere Göre Kayıt İstatistikleri")
+if records:
+    df_chart = pd.DataFrame(records)
+    if "name" in df_chart.columns
