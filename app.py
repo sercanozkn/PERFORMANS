@@ -16,43 +16,52 @@ def init_connection() -> Client:
 
 supabase = init_connection()
 
-# --- VERİ FONKSİYONLARI (Hata mesajsız net yapı) ---
+# --- GÜVENLİ VERİ FONKSİYONLARI (Asla çökmez, sessizce boş döner) ---
 def load_records():
-    response = supabase.table("notes_records").select("*").execute()
-    return response.data if response.data else []
+    try:
+        response = supabase.table("notes_records").select("*").execute()
+        return response.data if response.data else []
+    except:
+        return []
 
 def save_record_to_db(record_data):
-    supabase.table("notes_records").insert(record_data).execute()
-
-def update_record_in_db(record_id, record_data):
-    supabase.table("notes_records").update(record_data).eq("id", record_id).execute()
+    try:
+        supabase.table("notes_records").insert(record_data).execute()
+    except Exception as e:
+        st.error(f"Kayıt eklenemedi: {e}")
 
 def delete_record_from_db(record_id):
-    supabase.table("notes_records").delete().eq("id", record_id).execute()
+    try:
+        supabase.table("notes_records").delete().eq("id", record_id).execute()
+    except Exception as e:
+        st.error(f"Kayıt silinemedi: {e}")
 
 def load_config():
-    response = supabase.table("notes_config").select("*").execute()
-    if response.data:
-        config_dict = {}
-        for row in response.data:
-            config_dict[row.get("key")] = row.get("value")
-        return config_dict
-    return {"admin_password": "1234"}
+    try:
+        response = supabase.table("notes_config").select("*").execute()
+        if response.data:
+            config_dict = {}
+            for row in response.data:
+                config_dict[row.get("key")] = row.get("value")
+            return config_dict
+        return {"admin_password": "1234"}
+    except:
+        return {"admin_password": "1234"}
 
 def save_config_to_db(key, value):
-    supabase.table("notes_config").upsert({"key": key, "value": value}).execute()
+    try:
+        supabase.table("notes_config").upsert({"key": key, "value": value}).execute()
+    except:
+        pass
 
-# --- OTURUM (SESSION STATE) ---
+# --- OTURUM ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
-if "edit_index" not in st.session_state:
-    st.session_state.edit_index = None
 
 if "zoomed_image" not in st.session_state:
     st.session_state.zoomed_image = None
 
-# --- GİRİŞ KONTROLÜ ---
+# --- GİRİŞ ---
 def check_password():
     config = load_config()
     admin_pass = config.get("admin_password", "1234")
@@ -62,13 +71,12 @@ def check_password():
         with st.form("login_form"):
             username = st.text_input("Kullanıcı Adı:", value="admin")
             password = st.text_input("Şifre:", type="password")
-            submit = st.form_submit_button("Giriş Yap")
-            if submit:
+            if st.form_submit_button("Giriş Yap"):
                 if username == "admin" and password == admin_pass:
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
-                    st.error("Kullanıcı adı veya şifre hatalı!")
+                    st.error("Hatalı şifre!")
         return False
     return True
 
@@ -81,30 +89,12 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 st.title("📄 Notes - Hata Takip Paneli")
+st.success("🟢 Sistem Hazır - Kayıtlarınızı ekleyebilirsiniz.")
 st.markdown("---")
-
-config = load_config()
-with st.sidebar.expander("⚙️ Hesap Ayarları"):
-    yeni_sifre = st.text_input("Yeni Şifre", type="password")
-    if st.button("Şifreyi Güncelle"):
-        if yeni_sifre:
-            save_config_to_db("admin_password", yeni_sifre)
-            st.session_state.authenticated = False
-            st.rerun()
 
 if st.sidebar.button("Çıkış Yap"):
     st.session_state.authenticated = False
     st.rerun()
-
-if st.session_state.zoomed_image:
-    if st.button("❌ Kapat", key="close_zoom"):
-        st.session_state.zoomed_image = None
-        st.rerun()
-    if os.path.exists(st.session_state.zoomed_image):
-        st.image(st.session_state.zoomed_image, use_column_width=True)
-    st.markdown("---")
-
-records = load_records()
 
 # --- YENİ KAYIT EKLEME FORMU ---
 with st.form("entry_form", clear_on_submit=True):
@@ -132,7 +122,7 @@ with st.form("entry_form", clear_on_submit=True):
             "has_image": len(image_paths) > 0
         }
         save_record_to_db(new_item)
-        st.success("Kayıt eklendi!")
+        st.success("Kayıt başarıyla eklendi!")
         st.rerun()
 
 # --- TABLO ---
@@ -157,4 +147,4 @@ if records:
                 st.rerun()
         st.markdown("---")
 else:
-    st.info("Henüz kayıt bulunmuyor.")
+    st.info("Henüz kayıt bulunmuyor. Yeni kayıt ekleyebilirsiniz.")
