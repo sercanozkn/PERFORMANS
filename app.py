@@ -1,120 +1,69 @@
 import streamlit as st
 import os
-import json
-import base64
-import requests
 import pandas as pd
 from collections import Counter
+from supabase import create_client, Client
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- GİTHUB API SENKRONİZASYON FONKSİYONLARI ---
-DATA_FILE = "records_data.json"
-CONFIG_FILE = "config_data.json"
+# --- SUPABASE BULUT BAĞLANTISI ---
+@st.cache_resource
+def init_connection() -> Client:
+    url = st.secrets["SUPABASE_URL"].strip()
+    key = st.secrets["SUPABASE_KEY"].strip()
+    return create_client(url, key)
 
-def get_github_secrets():
-    try:
-        token = st.secrets["GITHUB_TOKEN"]
-        repo = st.secrets["REPO_NAME"]
-        branch = st.secrets.get("BRANCH", "main")
-        return token, repo, branch
-    except:
-        return None, None, None
+supabase = init_connection()
 
-def load_from_github(file_path):
-    token, repo, branch = get_github_secrets()
-    if not token or not repo:
-        return None
-    
-    url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
-    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
-    params = {"ref": branch}
-    
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200:
-        file_content_encoded = response.json().get("content", "")
-        file_content_bytes = base64.b64decode(file_content_encoded)
-        return json.loads(file_content_bytes.decode("utf-8"))
-    return None
-
-def save_to_github(file_path, data_dict_or_list, commit_message):
-    token, repo, branch = get_github_secrets()
-    
-    # Her durumda yerel diske de yazalım (yedek olsun)
-    if isinstance(data_dict_or_list, list):
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data_dict_or_list, f, ensure_ascii=False, indent=4)
-    else:
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data_dict_or_list, f, ensure_ascii=False, indent=4)
-
-    if not token or not repo:
-        return  # Secrets tanımlı değilse sadece yerelde kalır
-        
-    url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
-    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
-    
-    # Mevcut dosyanın SHA değerini almalıyız (GitHub API güncelleme için SHA ister)
-    params = {"ref": branch}
-    sha = None
-    res = requests.get(url, headers=headers, params=params)
-    if res.status_code == 200:
-        sha = res.json().get("sha")
-        
-    # Veriyi base64 formatına çevir
-    json_str = json.dumps(data_dict_or_list, ensure_ascii=False, indent=4)
-    encoded_content = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
-    
-    payload = {
-        "message": commit_message,
-        "content": encoded_content,
-        "branch": branch
-    }
-    if sha:
-        payload["sha"] = sha
-        
-    requests.put(url, headers=headers, json=payload)
-
-# --- VERİ VE AYARLARI YÜKLEME ---
+# --- SUPABASE VERİ VE AYAR FONKSİYONLARI ---
 def load_records():
-    # Önce GitHub'dan çekmeyi dene, yoksa yerel dosyaya bak
-    gh_data = load_from_github(DATA_FILE)
-    if gh_data is not None:
-        return gh_data
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return []
-    return []
+    try:
+        response = supabase.table("notes_records").select("*").execute()
+        return response.data if response.data else []
+    except Exception as e:
+        st.error(f"Kayıtlar yüklenirken hata oluştu: {e}")
+        return []
+
+def save_record_to_db(record_data):
+    try:
+        supabase.table("notes_records").insert(record_data).execute()
+    except Exception as e:
+        st.error(f"Kayıt eklenirken hata oluştu: {e}")
+
+def update_record_in_db(record_id, record_data):
+    try:
+        supabase.table("notes_records").update(record_data).eq("id", record_id).execute()
+    except Exception as e:
+        st.error(f"Kayıt güncellenirken hata oluştu: {e}")
+
+def delete_record_from_db(record_id):
+    try:
+        supabase.table("notes_records").delete().eq("id", record_id).execute()
+    except Exception as e:
+        st.error(f"Kayıt silinirken hata oluştu: {e}")
 
 def load_config():
-    gh_data = load_from_github(CONFIG_FILE)
-    if gh_data is not None:
-        return gh_data
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {"username": "admin", "password": "1234"}
-    return {"username": "admin", "password": "1234"}
+    try:
+        response = supabase.table("notes_config").select("*").execute()
+        if response.data:
+            config_dict = {}
+            for row in response.data:
+                config_dict[row.get("key")] = row.get("value")
+            return config_dict
+        return {"admin_password": "1234"}
+    except Exception as e:
+        return {"admin_password": "1234"}
+
+def save_config_to_db(key, value):
+    try:
+        supabase.table("notes_config").upsert({"key": key, "value": value}).execute()
+    except Exception as e:
+        st.error(f"Ayar kaydedilirken hata oluştu: {e}")
 
 # --- OTURUM (SESSION STATE) BAŞLANGIÇ DEĞERLERİ ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
-config = load_config()
-if "username" not in st.session_state:
-    st.session_state.username = config["username"]
-
-if "password" not in st.session_state:
-    st.session_state.password = config["password"]
-
-if "records" not in st.session_state:
-    st.session_state.records = load_records()
 
 if "edit_index" not in st.session_state:
     st.session_state.edit_index = None
@@ -124,17 +73,19 @@ if "zoomed_image" not in st.session_state:
 
 # --- KULLANICI GİRİŞ FONKSİYONU ---
 def check_password():
-    current_config = load_config()
+    config = load_config()
+    admin_pass = config.get("admin_password", "1234")
+    
     if not st.session_state.authenticated:
         st.title("🔒 Giriş Yap")
-        st.write("Lütfen devam etmek için kullanıcı adı ve şifrenizi girin.")
+        st.write("Lütfen devam etmek için şifrenizi girin (Varsayılan: 1234).")
 
         with st.form("login_form"):
-            username = st.text_input("Kullanıcı Adı:")
+            username = st.text_input("Kullanıcı Adı:", value="admin")
             password = st.text_input("Şifre:", type="password")
             submit = st.form_submit_button("Giriş Yap")
             if submit:
-                if username == current_config["username"] and password == current_config["password"]:
+                if username == "admin" and password == admin_pass:
                     st.session_state.authenticated = True
                     st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
                     st.rerun()
@@ -153,22 +104,22 @@ if not os.path.exists(UPLOAD_DIR):
 
 # Notion Tarzı Üst Başlık
 st.title("📄 Notes - Hata Takip Paneli")
+st.success("🟢 Bulut Veritabanı (Supabase) Bağlantısı Aktif - Verileriniz Güvende!")
 st.markdown("---")
 
 # --- KULLANICI AYARLARI ---
-current_config = load_config()
+config = load_config()
 with st.sidebar.expander("⚙️ Hesap Ayarları"):
-    yeni_kullanici = st.text_input("Yeni Kullanıcı Adı", value=current_config["username"])
     yeni_sifre = st.text_input("Yeni Şifre", type="password")
     
-    if st.button("Bilgileri Güncelle"):
-        pass_to_save = yeni_sifre if yeni_sifre else current_config["password"]
-        save_to_github(CONFIG_FILE, {"username": yeni_kullanici, "password": pass_to_save}, "Update config settings")
-        st.session_state.username = yeni_kullanici
-        st.session_state.password = pass_to_save
-        st.success("Bilgiler kalıcı olarak güncellendi! Yeniden giriş yapın.")
-        st.session_state.authenticated = False
-        st.rerun()
+    if st.button("Şifreyi Güncelle"):
+        if yeni_sifre:
+            save_config_to_db("admin_password", yeni_sifre)
+            st.success("Şifre kalıcı olarak güncellendi! Yeniden giriş yapın.")
+            st.session_state.authenticated = False
+            st.rerun()
+        else:
+            st.warning("Lütfen yeni şifre girin.")
 
 if st.sidebar.button("Çıkış Yap"):
     st.session_state.authenticated = False
@@ -188,14 +139,17 @@ if st.session_state.zoomed_image:
         st.image(st.session_state.zoomed_image, use_column_width=True)
     st.markdown("---")
 
+records = load_records()
+
 # --- OPEN BUTONUNA BASILINCA AÇILAN DETAY VE DÜZENLEME PANELİ ---
 if st.session_state.edit_index is not None:
     idx = st.session_state.edit_index
-    if idx < len(st.session_state.records):
-        current_record = st.session_state.records[idx]
+    if idx < len(records):
+        current_record = records[idx]
+        record_id = current_record.get("id")
         
-        st.markdown(f"### 📂 Ayrıntı ve Düzenleme Ekranı: {current_record['name']}")
-        st.info("Bu alanda seçilen kişinin kayıtlarını/hatalarını inceleyebilir ve güncelleyebilirsiniz.")
+        st.markdown(f"### 📂 Ayrıntı ve Düzenleme Ekranı: {current_record.get('name', '')}")
+        st.info("Bu alanda seçilen kaydı inceleyebilir ve güncelleyebilirsiniz.")
         
         with st.form("open_detail_edit_form"):
             edit_name = st.text_input("Text (İsim):", value=current_record.get("name", ""))
@@ -235,7 +189,7 @@ if st.session_state.edit_index is not None:
                                 image_paths.append(img_path)
                     
                     has_img = len(image_paths) > 0
-                    st.session_state.records[idx] = {
+                    updated_data = {
                         "name": edit_name,
                         "date": str(edit_date),
                         "note": edit_note,
@@ -243,9 +197,9 @@ if st.session_state.edit_index is not None:
                         "image_paths": image_paths,
                         "has_image": has_img
                     }
-                    save_to_github(DATA_FILE, st.session_state.records, f"Update record for {edit_name}")
+                    update_record_in_db(record_id, updated_data)
                     st.session_state.edit_index = None
-                    st.success("Kayıt başarıyla güncellendi ve GitHub'a kaydedildi!")
+                    st.success("Kayıt başarıyla bulutta güncellendi!")
                     st.rerun()
                 else:
                     st.warning("Lütfen İsim ve Not alanlarını boş bırakmayın.")
@@ -278,52 +232,49 @@ with st.form("entry_form", clear_on_submit=True):
                     image_paths.append(image_path)
                 has_image = True
             
-            if "records" not in st.session_state:
-                st.session_state.records = load_records()
-                
-            st.session_state.records.append({
+            new_item = {
                 "name": name,
                 "date": str(date),
                 "note": note,
                 "image_path": image_paths[0] if image_paths else None,
                 "image_paths": image_paths,
                 "has_image": has_image
-            })
-            save_to_github(DATA_FILE, st.session_state.records, f"Add new record for {name}")
-            st.success(f"'{name}' için kayıt/hata başarıyla eklendi ve GitHub'a kaydedildi!")
+            }
+            save_record_to_db(new_item)
+            st.success(f"'{name}' için kayıt/hata başarıyla buluta eklendi!")
             st.rerun()
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- HATA ANALİZİ, ORTALAMA HESABI VE GRAFİK PANELİ ---
-st.session_state.records = load_records() # Güncel verileri GitHub/Diskten oku
-if st.session_state.records:
+# --- HATA ANALİZİ VE GRAFİK PANELİ ---
+records = load_records()
+if records:
     st.markdown("---")
     st.subheader("📊 Hata Analizi ve Ortalama Paneli")
     
-    all_names = [r["name"] for r in st.session_state.records]
+    all_names = [r.get("name", "") for r in records if r.get("name")]
     error_counts = Counter(all_names)
-    df_errors = pd.DataFrame(list(error_counts.items()), columns=["İsim", "Hata Sayısı"])
-    
-    ortalama_hata = df_errors["Hata Sayısı"].mean()
-    st.metric(label="📈 Kişi Başı Ortalama Hata (Kayıt) Sayısı", value=f"{ortalama_hata:.2f}")
-    
-    col_g1, col_g2 = st.columns(2)
-    with col_g1:
-        st.markdown("### 🔴 En Çok Hata Yapanlar (Çoktan Aza)")
-        df_max = df_errors.sort_values(by="Hata Sayısı", ascending=False).set_index("İsim")
-        st.bar_chart(df_max)
-            
-    with col_g2:
-        st.markdown("### 🟢 En Az Hata Yapanlar (Azdan Çoka)")
-        df_min = df_errors.sort_values(by="Hata Sayısı", ascending=True).set_index("İsim")
-        st.bar_chart(df_min)
+    if error_counts:
+        df_errors = pd.DataFrame(list(error_counts.items()), columns=["İsim", "Hata Sayısı"])
+        ortalama_hata = df_errors["Hata Sayısı"].mean()
+        st.metric(label="📈 Kişi Başı Ortalama Hata (Kayıt) Sayısı", value=f"{ortalama_hata:.2f}")
+        
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            st.markdown("### 🔴 En Çok Hata Yapanlar")
+            df_max = df_errors.sort_values(by="Hata Sayısı", ascending=False).set_index("İsim")
+            st.bar_chart(df_max)
+                
+        with col_g2:
+            st.markdown("### 🟢 En Az Hata Yapanlar")
+            df_min = df_errors.sort_values(by="Hata Sayısı", ascending=True).set_index("İsim")
+            st.bar_chart(df_min)
 
 # --- NOTION TARZI TABLO VE SATIR GÖRÜNÜMÜ ---
 st.markdown("---")
 st.subheader("📋 All notes (Kayıt ve Hata Tablosu)")
 
-if st.session_state.records:
+if records:
     header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
     with header_col1:
         st.markdown("**İşlem (OPEN)**")
@@ -337,8 +288,9 @@ if st.session_state.records:
         st.markdown("**Actions (Sil)**")
     st.markdown("---")
 
-    for idx, record in enumerate(st.session_state.records):
+    for idx, record in enumerate(records):
         row_col1, row_col2, row_col3, row_col4, row_col5 = st.columns([1.2, 2.5, 2.5, 1.5, 1.5])
+        record_id = record.get("id")
         
         with row_col1:
             if st.button("OPEN", key=f"open_{idx}"):
@@ -364,18 +316,17 @@ if st.session_state.records:
                 st.write("-")
                 
         with row_col3:
-            st.markdown(f"**{record['name']}**")
-            st.caption(f"{record['note']}")
+            st.markdown(f"**{record.get('name', '')}**")
+            st.caption(f"{record.get('note', '')}")
             
         with row_col4:
-            st.write(record['date'])
+            st.write(record.get('date', ''))
             
         with row_col5:
             if st.button("🗑️ Sil", key=f"del_{idx}"):
-                st.session_state.records.pop(idx)
-                save_to_github(DATA_FILE, st.session_state.records, f"Delete record {idx}")
+                delete_record_from_db(record_id)
                 st.rerun()
                 
         st.markdown("---")
 else:
-    st.info("Henüz tabloya eklenmiş kayıt bulunmuyor.")
+    st.info("Henüz bulut veritabanında kayıt bulunmuyor.")
