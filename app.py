@@ -22,7 +22,6 @@ def load_records():
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 records = json.load(f)
-                # Eski veritabanı yapılarıyla uyumluluk için dönüştürme
                 for r in records:
                     if "image_path" in r and "image_paths" not in r:
                         r["image_paths"] = [r["image_path"]] if r["image_path"] else []
@@ -163,7 +162,6 @@ if editing_record:
     e_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY", key="edit_date")
     e_note = st.text_area("Not / Açıklama:", value=editing_record.get("note", ""), key="edit_note")
     
-    # Mevcut Görselleri Göster
     current_images = editing_record.get("image_paths", [])
     if current_images:
         st.markdown("**Mevcut Görseller:**")
@@ -173,7 +171,6 @@ if editing_record:
                 with img_cols[idx % 4]:
                     st.image(img_p, width=100)
     
-    # Sınırsız / Çoklu Yeni Görsel Ekleme
     e_uploaded_files = st.file_uploader("Yeni Görseller Yükle (İsteğe Bağlı - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="edit_file")
 
     col_up1, col_up2 = st.columns(2)
@@ -187,7 +184,6 @@ if editing_record:
                     
                     if e_uploaded_files:
                         new_img_paths = save_images(e_uploaded_files)
-                        # Mevcutların üzerine ekle veya tamamen yenile (Burada mevcutların üzerine ekliyoruz)
                         r["image_paths"] = r.get("image_paths", []) + new_img_paths
                         r["has_image"] = True
                         
@@ -203,32 +199,34 @@ if editing_record:
 
 else:
     with st.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
-        name = st.text_input("Text (İsim):", key="new_name")
-        date = st.date_input("Date (Tarih):", format="DD/MM/YYYY", key="new_date")
-        note = st.text_area("Not / Açıklama:", key="new_note")
-        # accept_multiple_files=True ile sınırsız dosya seçimi aktif edildi
-        uploaded_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="new_file")
-        
-        if st.button("Tabloya Ekle", type="primary"):
-            if name and note:
-                image_paths = save_images(uploaded_files)
-                
-                new_id = int(datetime.now().timestamp() * 1000)
-                new_item = {
-                    "id": new_id,
-                    "name": name,
-                    "date": date.strftime("%d/%m/%Y"),
-                    "note": note,
-                    "image_paths": image_paths,
-                    "has_image": bool(image_paths)
-                }
-                
-                records.insert(0, new_item)
-                save_records(records)
-                st.success("Kayıt başarıyla eklendi!")
-                st.rerun()
-            else:
-                st.warning("Lütfen İsim ve Not alanlarını doldurun.")
+        # Form kullanılarak ekleme sonrası alanların otomatik temizlenmesi sağlandı
+        with st.form("new_record_form", clear_on_submit=True):
+            name = st.text_input("Text (İsim):")
+            date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
+            note = st.text_area("Not / Açıklama:")
+            uploaded_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+            
+            submitted = st.form_submit_button("Tabloya Ekle", type="primary")
+            if submitted:
+                if name and note:
+                    image_paths = save_images(uploaded_files)
+                    
+                    new_id = int(datetime.now().timestamp() * 1000)
+                    new_item = {
+                        "id": new_id,
+                        "name": name,
+                        "date": date.strftime("%d/%m/%Y"),
+                        "note": note,
+                        "image_paths": image_paths,
+                        "has_image": bool(image_paths)
+                    }
+                    
+                    records.insert(0, new_item)
+                    save_records(records)
+                    st.success("Kayıt başarıyla eklendi!")
+                    st.rerun()
+                else:
+                    st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
 # --- İSME GÖRE GRAFİK / İSTATİSTİK BÖLÜMÜ ---
 st.markdown("---")
