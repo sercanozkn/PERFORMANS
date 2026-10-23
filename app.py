@@ -84,7 +84,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 4. RESİM BÜYÜTME (MODAL / POP-UP) ---
+# --- RESİM BÜYÜTME (MODAL / POP-UP) ---
 @st.dialog("🖼️ Görsel Tam Ekran Önizleme", width="large")
 def show_image_modal(img_path, title):
     st.subheader(title)
@@ -95,7 +95,7 @@ def show_image_modal(img_path, title):
     if st.button("Kapat", use_container_width=True):
         st.rerun()
 
-# --- 5. GİRİŞ / ŞİFRE DEĞİŞTİRME SEKMESİ (SIDEBAR) ---
+# --- GİRİŞ / ŞİFRE DEĞİŞTİRME SEKMESİ (SIDEBAR) ---
 with st.sidebar:
     st.title("⚙️ Yönetim Paneli")
     st.success("🟢 Aktif Oturum (Admin)")
@@ -172,4 +172,156 @@ if editing_record:
                     r["note"] = e_note
                     
                     if e_uploaded_file is not None:
-                        if current_img and os.path.exists
+                        if current_img and os.path.exists(current_img):
+                            try: os.remove(current_img)
+                            except: pass
+                        r["image_path"] = save_image(e_uploaded_file)
+                        r["has_image"] = True
+                        
+            save_records(records)
+            st.session_state.edit_id = None
+            st.success("Kayıt başarıyla güncellendi!")
+            st.rerun()
+            
+    with col_up2:
+        if st.button("❌ İptal", use_container_width=True):
+            st.session_state.edit_id = None
+            st.rerun()
+
+else:
+    with st.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
+        name = st.text_input("Text (İsim):", key="new_name")
+        date = st.date_input("Date (Tarih):", format="DD/MM/YYYY", key="new_date")
+        note = st.text_area("Not / Açıklama:", key="new_note")
+        uploaded_file = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=False, key="new_file")
+        
+        if st.button("Tabloya Ekle", type="primary"):
+            if name and note:
+                image_path = save_image(uploaded_file)
+                
+                new_id = int(datetime.now().timestamp() * 1000)
+                new_item = {
+                    "id": new_id,
+                    "name": name,
+                    "date": date.strftime("%d/%m/%Y"),
+                    "note": note,
+                    "image_path": image_path,
+                    "has_image": bool(image_path)
+                }
+                
+                records.insert(0, new_item)
+                save_records(records)
+                st.success("Kayıt başarıyla eklendi!")
+                st.rerun()
+            else:
+                st.warning("Lütfen İsim ve Not alanlarını doldurun.")
+
+# --- İSME GÖRE GRAFİK / İSTATİSTİK BÖLÜMÜ ---
+st.markdown("---")
+st.subheader("📊 İsimlere Göre Kayıt İstatistikleri")
+if records:
+    df_chart = pd.DataFrame(records)
+    if "name" in df_chart.columns and not df_chart.empty:
+        name_counts = df_chart["name"].value_counts().reset_index()
+        name_counts.columns = ["İsim", "Kayıt Sayısı"]
+        name_counts = name_counts.set_index("İsim")
+        st.bar_chart(name_counts)
+    else:
+        st.info("Grafik için yeterli veri bulunmuyor.")
+else:
+    st.info("Henüz istatistik oluşturulacak kayıt yok.")
+
+# --- TABLO VE YÖNETİM ---
+st.markdown("---")
+col_header, col_export = st.columns([4, 2])
+with col_header:
+    st.subheader("📋 All notes (Kayıt ve Hata Tablosu)")
+
+# --- EXCEL / CSV DIŞA AKTARMA ---
+if records:
+    df_download = pd.DataFrame(records)[["name", "date", "note"]]
+    df_download.columns = ["İsim", "Tarih", "Not / Açıklama"]
+    csv_data = df_download.to_csv(index=False, encoding='utf-8-sig')
+    with col_export:
+        st.download_button(
+            label="📥 Excel/CSV Olarak İndir",
+            data=csv_data,
+            file_name=f"notlar_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+# --- ARAMA VE FİLTRELEME ---
+search_query = st.text_input("🔍 Kayıtlarda Arama Yap (İsim veya Not):", "").strip().lower()
+
+filtered_records = records
+if search_query:
+    filtered_records = [
+        r for r in records
+        if search_query in r.get("name", "").lower() or search_query in r.get("note", "").lower()
+    ]
+
+# --- SAYFALAMASYON (PAGINATION) / PERFORMANS ---
+if filtered_records:
+    col_p1, col_p2 = st.columns([2, 4])
+    with col_p1:
+        items_per_page = st.selectbox("Sayfa Başına Kayıt:", [5, 10, 20, 50], index=0)
+    
+    total_items = len(filtered_records)
+    total_pages = (total_items - 1) // items_per_page + 1 if total_items > 0 else 1
+    
+    with col_p2:
+        if total_pages > 1:
+            page_number = st.number_input("Sayfa Seç:", min_value=1, max_value=total_pages, value=1, step=1)
+        else:
+            page_number = 1
+            
+    start_idx = (page_number - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    paginated_records = filtered_records[start_idx:end_idx]
+
+    st.markdown(f"*Toplam **{total_items}** kayıttan **{start_idx+1} - {min(end_idx, total_items)}** arası gösteriliyor. (Sayfa {page_number}/{total_pages})*")
+    st.markdown("---")
+
+    h1, h2, h3, h4, h5 = st.columns([2, 3, 2, 1, 1])
+    h1.markdown("**İsim & Not**")
+    h2.markdown("**Tarih**")
+    h3.markdown("**Görsel**")
+    h4.markdown("**İşlem**")
+    h5.markdown("**İşlem**")
+    st.markdown("---")
+
+    for record in paginated_records:
+        col1, col2, col3, col4, col5 = st.columns([2, 3, 2, 1, 1])
+        with col1:
+            st.markdown(f"**{record.get('name', '')}**")
+            st.caption(f"{record.get('note', '')}")
+        with col2:
+            st.write(record.get('date', ''))
+        with col3:
+            img_p = record.get('image_path')
+            if img_p and os.path.exists(img_p):
+                if st.button("🔍 Büyüt", key=f"zoom_{record.get('id', 0)}"):
+                    show_image_modal(img_p, f"{record.get('name')} - Görsel Detayı")
+                st.image(img_p, width=60)
+            else:
+                st.write("-")
+        with col4:
+            if st.button("✏️ Düzenle", key=f"edit_{record.get('id', 0)}"):
+                st.session_state.edit_id = record.get('id')
+                st.rerun()
+        with col5:
+            if st.button("🗑️ Sil", key=f"del_{record.get('id', 0)}"):
+                img_to_delete = record.get('image_path')
+                if img_to_delete and os.path.exists(img_to_delete):
+                    try: os.remove(img_to_delete)
+                    except: pass
+
+                records = [r for r in records if r.get('id') != record.get('id')]
+                save_records(records)
+                if st.session_state.edit_id == record.get('id'):
+                    st.session_state.edit_id = None
+                st.rerun()
+        st.markdown("---")
+else:
+    st.info("Aramanıza uygun veya henüz eklenmiş bir kayıt bulunmuyor.")
