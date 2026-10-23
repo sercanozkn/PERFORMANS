@@ -67,7 +67,7 @@ if not check_password():
 
 # --- ANA UYGULAMA ---
 st.title("📄 Notes - Hata ve Kayıt Takip Paneli")
-st.success("🟢 Kararlı Lokal Mod Aktif (Tekli Resim ve Ortak Grafik)")
+st.success("🟢 Kararlı Lokal Mod Aktif (Çoklu Resim ve 3 Farklı Grafik)")
 st.markdown("---")
 
 if st.sidebar.button("Çıkış Yap"):
@@ -100,19 +100,24 @@ if editing_record:
     e_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY", key="edit_date")
     e_note = st.text_area("Not / Açıklama:", value=editing_record.get("note", ""), key="edit_note")
     
-    # Tekli resim yükleme (Düzenleme)
-    e_uploaded_file = st.file_uploader("Files & media (Yeni Resim Yükle - Tek Dosya):", type=["jpg", "jpeg", "png"], accept_multiple_files=False, key="edit_file")
+    # Çoklu resim yükleme (Düzenleme)
+    e_uploaded_files = st.file_uploader("Files & media (Yeni Resimler Yükle - Çoklu):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="edit_file")
     
     col_up1, col_up2 = st.columns(2)
     with col_up1:
         if st.button("💾 Değişiklikleri Kaydet", use_container_width=True):
+            image_paths = editing_record.get("image_paths", [])
             image_path = editing_record.get("image_path")
             has_img = editing_record.get("has_image", False)
             
-            if e_uploaded_file is not None:
-                image_path = os.path.join(UPLOAD_DIR, e_uploaded_file.name)
-                with open(image_path, "wb") as f:
-                    f.write(e_uploaded_file.getbuffer())
+            if e_uploaded_files:
+                image_paths = []
+                for uf in e_uploaded_files:
+                    path = os.path.join(UPLOAD_DIR, uf.name)
+                    with open(path, "wb") as f:
+                        f.write(uf.getbuffer())
+                    image_paths.append(path)
+                image_path = image_paths[0] if image_paths else None
                 has_img = True
                 
             for r in records:
@@ -121,6 +126,7 @@ if editing_record:
                     r["date"] = e_date.strftime("%d/%m/%Y")
                     r["note"] = e_note
                     r["image_path"] = image_path
+                    r["image_paths"] = image_paths
                     r["has_image"] = has_img
                     
             save_records(records)
@@ -137,17 +143,21 @@ else:
     date = st.date_input("Date (Tarih):", format="DD/MM/YYYY", key="new_date")
     note = st.text_area("Not / Açıklama:", key="new_note")
     
-    # Tekli resim yükleme (Yeni Kayıt - accept_multiple_files=False)
-    uploaded_file = st.file_uploader("Files & media (Resim Yükle - Tek Dosya):", type=["jpg", "jpeg", "png"], accept_multiple_files=False, key="new_file")
+    # Çoklu resim yükleme (Yeni Kayıt - accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Files & media (Resimler Yükle - Çoklu):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="new_file")
     
     if st.button("Tabloya Ekle", type="primary"):
         if name and note:
+            image_paths = []
             image_path = None
             has_img = False
-            if uploaded_file is not None:
-                image_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
-                with open(image_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+            if uploaded_files:
+                for uf in uploaded_files:
+                    path = os.path.join(UPLOAD_DIR, uf.name)
+                    with open(path, "wb") as f:
+                        f.write(uf.getbuffer())
+                    image_paths.append(path)
+                image_path = image_paths[0] if image_paths else None
                 has_img = True
             
             new_id = int(datetime.now().timestamp() * 1000)
@@ -157,6 +167,7 @@ else:
                 "date": date.strftime("%d/%m/%Y"),
                 "note": note,
                 "image_path": image_path,
+                "image_paths": image_paths,
                 "has_image": has_img
             }
             
@@ -167,19 +178,49 @@ else:
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- ORTAK İSİM BAZLI GRAFİK BÖLÜMÜ ---
+# --- 3 AYRI GRAFİK BÖLÜMÜ ---
 st.markdown("---")
-st.subheader("📊 İsim Bazlı Toplam İstatistik Grafiği")
+st.subheader("📊 İstatistik Grafikleri (Resimli, Resimsiz ve Ortalama)")
 
 if records:
     df_chart = pd.DataFrame(records)
-    if "name" in df_chart.columns and not df_chart.empty:
-        name_counts = df_chart["name"].value_counts().reset_index()
-        name_counts.columns = ["İsim", "Kayıt Sayısı"]
-        name_counts = name_counts.set_index("İsim")
-        st.bar_chart(name_counts)
-    else:
-        st.info("Grafik için yeterli veri bulunmuyor.")
+    
+    col_g1, col_g2, col_g3 = st.columns(3)
+    
+    with col_g1:
+        st.markdown("### 🖼️ Resimli Kayıtlar")
+        df_with_img = df_chart[df_chart["has_image"] == True] if "has_image" in df_chart.columns else pd.DataFrame()
+        if not df_with_img.empty and "name" in df_with_img.columns:
+            img_counts = df_with_img["name"].value_counts().reset_index()
+            img_counts.columns = ["İsim", "Kayıt Sayısı"]
+            img_counts = img_counts.set_index("İsim")
+            st.bar_chart(img_counts)
+        else:
+            st.info("Resimli kayıt yok.")
+            
+    with col_g2:
+        st.markdown("### 📄 Resimsiz Kayıtlar")
+        df_without_img = df_chart[df_chart["has_image"] != True] if "has_image" in df_chart.columns else df_chart
+        if not df_without_img.empty and "name" in df_without_img.columns:
+            no_img_counts = df_without_img["name"].value_counts().reset_index()
+            no_img_counts.columns = ["İsim", "Kayıt Sayısı"]
+            no_img_counts = no_img_counts.set_index("İsim")
+            st.bar_chart(no_img_counts)
+        else:
+            st.info("Resimsiz kayıt yok.")
+            
+    with col_g3:
+        st.markdown("### 📈 Ortalama / Genel Dağılım")
+        if "name" in df_chart.columns and not df_chart.empty:
+            # İsim bazlı ortalama veya genel toplam dağılımı
+            avg_counts = df_chart["name"].value_counts().reset_index()
+            avg_counts.columns = ["İsim", "Ortalama/Toplam"]
+            # Ortalama değer hesabı (örnek olarak toplam sayı / toplam benzersiz isim veya doğrudan oran)
+            avg_counts["Ortalama/Toplam"] = avg_counts["Ortalama/Toplam"] / len(avg_counts) if len(avg_counts) > 0 else avg_counts["Ortalama/Toplam"]
+            avg_counts = avg_counts.set_index("İsim")
+            st.bar_chart(avg_counts)
+        else:
+            st.info("Veri bulunmuyor.")
 else:
     st.info("Henüz istatistik oluşturulacak kayıt yok.")
 
@@ -197,9 +238,17 @@ if records:
         with col2:
             st.write(record.get('date', ''))
         with col3:
-            img_p = record.get('image_path')
-            if img_p and os.path.exists(img_p):
-                st.image(img_p, width=50)
+            # Çoklu resimleri veya tek resmi göster
+            img_paths = record.get('image_paths', [])
+            if not img_paths and record.get('image_path'):
+                img_paths = [record.get('image_path')]
+                
+            valid_imgs = [p for p in img_paths if os.path.exists(p)]
+            if valid_imgs:
+                img_cols = st.columns(len(valid_imgs))
+                for idx, img_p in enumerate(valid_imgs):
+                    with img_cols[idx]:
+                        st.image(img_p, width=40)
             else:
                 st.write("-")
         with col4:
@@ -208,7 +257,7 @@ if records:
                 st.rerun()
         with col5:
             if st.button("🗑️ Sil", key=f"del_{record.get('id', 0)}"):
-                updated_records = [r for r in records if r.get('id') != record.get('id')]
+                updated_records = [r for r in records if r.get('id'] != record.get('id')]
                 save_records(updated_records)
                 if st.session_state.edit_id == record.get('id'):
                     st.session_state.edit_id = None
