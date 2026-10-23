@@ -16,7 +16,7 @@ def init_connection() -> Client:
 
 supabase = init_connection()
 
-# --- GÜVENLİ VERİ FONKSİYONLARI (Asla çökmez, sessizce boş döner) ---
+# --- GÜVENLİ VERİ FONKSİYONLARI ---
 def load_records():
     try:
         response = supabase.table("notes_records").select("*").execute()
@@ -57,9 +57,6 @@ def save_config_to_db(key, value):
 # --- OTURUM ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
-if "zoomed_image" not in st.session_state:
-    st.session_state.zoomed_image = None
 
 # --- GİRİŞ ---
 def check_password():
@@ -105,24 +102,23 @@ with st.form("entry_form", clear_on_submit=True):
     uploaded_files = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
     
     if st.form_submit_button(label="Tabloya Ekle") and name and note:
-        image_paths = []
+        image_path = None
         if uploaded_files:
-            for uf in uploaded_files:
-                img_path = os.path.join(UPLOAD_DIR, uf.name)
-                with open(img_path, "wb") as f:
-                    f.write(uf.getbuffer())
-                image_paths.append(img_path)
+            uf = uploaded_files[0] # İlk resmi alalım
+            image_path = os.path.join(UPLOAD_DIR, uf.name)
+            with open(image_path, "wb") as f:
+                f.write(uf.getbuffer())
         
+        # Supabase tablosundaki sütunlarla birebir uyumlu veri paketi
         new_item = {
             "name": name,
             "date": str(date),
             "note": note,
-            "image_path": image_paths[0] if image_paths else None,
-            "image_paths": image_paths,
-            "has_image": len(image_paths) > 0
+            "image_path": image_path,
+            "has_image": bool(image_path)
         }
         save_record_to_db(new_item)
-        st.success("Kayıt başarıyla eklendi!")
+        st.success("Kayıt başarıyla buluta eklendi!")
         st.rerun()
 
 # --- TABLO ---
@@ -139,10 +135,13 @@ if records:
         with col2:
             st.write(record.get('date', ''))
         with col3:
-            if record.get('image_path') and os.path.exists(record.get('image_path')):
-                st.image(record.get('image_path'), width=50)
+            img_p = record.get('image_path')
+            if img_p and os.path.exists(img_p):
+                st.image(img_p, width=50)
+            else:
+                st.write("-")
         with col4:
-            if st.button("🗑️ Sil", key=f"del_{idx}"):
+            if st.button("🗑️ Sil", key=f"del_{record.get('id', idx)}"):
                 delete_record_from_db(record.get("id"))
                 st.rerun()
         st.markdown("---")
