@@ -21,7 +21,12 @@ def load_records():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                records = json.load(f)
+                # Eski veritabanı yapılarıyla uyumluluk için dönüştürme
+                for r in records:
+                    if "image_path" in r and "image_paths" not in r:
+                        r["image_paths"] = [r["image_path"]] if r["image_path"] else []
+                return records
         except Exception as e:
             st.error(f"Veri yüklenirken hata oluştu: {e}")
             return []
@@ -44,17 +49,19 @@ def save_config(config):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
 
-def save_image(uploaded_file):
-    """Görseli çakışmaları önleyecek şekilde benzersiz bir isimle kaydeder."""
-    if uploaded_file is not None:
-        file_ext = os.path.splitext(uploaded_file.name)[1]
-        unique_filename = f"{uuid.uuid4().hex}_{int(datetime.now().timestamp())}{file_ext}"
-        image_path = os.path.join(UPLOAD_DIR, unique_filename)
-        
-        with open(image_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        return image_path
-    return None
+def save_images(uploaded_files):
+    """Birden fazla görseli çakışmaları önleyecek şekilde benzersiz isimlerle kaydeder."""
+    image_paths = []
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            file_ext = os.path.splitext(uploaded_file.name)[1]
+            unique_filename = f"{uuid.uuid4().hex}_{int(datetime.now().timestamp())}{file_ext}"
+            image_path = os.path.join(UPLOAD_DIR, unique_filename)
+            
+            with open(image_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            image_paths.append(image_path)
+    return image_paths
 
 # --- OTURUM (SESSION) YÖNETİMİ ---
 if "authenticated" not in st.session_state:
@@ -156,11 +163,18 @@ if editing_record:
     e_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY", key="edit_date")
     e_note = st.text_area("Not / Açıklama:", value=editing_record.get("note", ""), key="edit_note")
     
-    current_img = editing_record.get("image_path")
-    if current_img and os.path.exists(current_img):
-        st.image(current_img, width=120, caption="Mevcut Görsel")
+    # Mevcut Görselleri Göster
+    current_images = editing_record.get("image_paths", [])
+    if current_images:
+        st.markdown("**Mevcut Görseller:**")
+        img_cols = st.columns(len(current_images) if len(current_images) <= 4 else 4)
+        for idx, img_p in enumerate(current_images):
+            if os.path.exists(img_p):
+                with img_cols[idx % 4]:
+                    st.image(img_p, width=100)
     
-    e_uploaded_file = st.file_uploader("Yeni Görsel Yükle (İsteğe Bağlı):", type=["jpg", "jpeg", "png"], key="edit_file")
+    # Sınırsız / Çoklu Yeni Görsel Ekleme
+    e_uploaded_files = st.file_uploader("Yeni Görseller Yükle (İsteğe Bağlı - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="edit_file")
 
     col_up1, col_up2 = st.columns(2)
     with col_up1:
@@ -171,11 +185,10 @@ if editing_record:
                     r["date"] = e_date.strftime("%d/%m/%Y")
                     r["note"] = e_note
                     
-                    if e_uploaded_file is not None:
-                        if current_img and os.path.exists(current_img):
-                            try: os.remove(current_img)
-                            except: pass
-                        r["image_path"] = save_image(e_uploaded_file)
+                    if e_uploaded_files:
+                        new_img_paths = save_images(e_uploaded_files)
+                        # Mevcutların üzerine ekle veya tamamen yenile (Burada mevcutların üzerine ekliyoruz)
+                        r["image_paths"] = r.get("image_paths", []) + new_img_paths
                         r["has_image"] = True
                         
             save_records(records)
@@ -193,11 +206,12 @@ else:
         name = st.text_input("Text (İsim):", key="new_name")
         date = st.date_input("Date (Tarih):", format="DD/MM/YYYY", key="new_date")
         note = st.text_area("Not / Açıklama:", key="new_note")
-        uploaded_file = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=False, key="new_file")
+        # accept_multiple_files=True ile sınırsız dosya seçimi aktif edildi
+        uploaded_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="new_file")
         
         if st.button("Tabloya Ekle", type="primary"):
             if name and note:
-                image_path = save_image(uploaded_file)
+                image_paths = save_images(uploaded_files)
                 
                 new_id = int(datetime.now().timestamp() * 1000)
                 new_item = {
@@ -205,8 +219,8 @@ else:
                     "name": name,
                     "date": date.strftime("%d/%m/%Y"),
                     "note": note,
-                    "image_path": image_path,
-                    "has_image": bool(image_path)
+                    "image_paths": image_paths,
+                    "has_image": bool(image_paths)
                 }
                 
                 records.insert(0, new_item)
@@ -299,11 +313,13 @@ if filtered_records:
         with col2:
             st.write(record.get('date', ''))
         with col3:
-            img_p = record.get('image_path')
-            if img_p and os.path.exists(img_p):
-                if st.button("🔍 Büyüt", key=f"zoom_{record.get('id', 0)}"):
-                    show_image_modal(img_p, f"{record.get('name')} - Görsel Detayı")
-                st.image(img_p, width=60)
+            img_paths = record.get('image_paths', [])
+            if img_paths:
+                for idx, img_p in enumerate(img_paths):
+                    if os.path.exists(img_p):
+                        if st.button(f"🔍 Büyüt {idx+1}", key=f"zoom_{record.get('id', 0)}_{idx}"):
+                            show_image_modal(img_p, f"{record.get('name')} - Görsel {idx+1}")
+                        st.image(img_p, width=50)
             else:
                 st.write("-")
         with col4:
@@ -312,10 +328,11 @@ if filtered_records:
                 st.rerun()
         with col5:
             if st.button("🗑️ Sil", key=f"del_{record.get('id', 0)}"):
-                img_to_delete = record.get('image_path')
-                if img_to_delete and os.path.exists(img_to_delete):
-                    try: os.remove(img_to_delete)
-                    except: pass
+                imgs_to_delete = record.get('image_paths', [])
+                for img_to_delete in imgs_to_delete:
+                    if img_to_delete and os.path.exists(img_to_delete):
+                        try: os.remove(img_to_delete)
+                        except: pass
 
                 records = [r for r in records if r.get('id') != record.get('id')]
                 save_records(records)
