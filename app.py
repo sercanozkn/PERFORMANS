@@ -230,37 +230,65 @@ else:
 
 # --- PLOTLY İLE MODERN İSTATİSTİK / GRAFİK BÖLÜMÜ ---
 st.markdown("---")
-st.subheader("📊 İsimlere Göre Kayıt İstatistikleri")
+st.subheader("📊 İstatistikler ve Grafikler")
+
 if records:
     df_chart = pd.DataFrame(records)
-    if "name" in df_chart.columns and not df_chart.empty:
-        name_counts = df_chart["name"].value_counts().reset_index()
-        name_counts.columns = ["İsim", "Kayıt Sayısı"]
+    
+    # Resim Var / Yok Bilgisini Belirleme
+    df_chart["Görsel Durumu"] = df_chart["image_paths"].apply(lambda x: "Resimli Kayıt" if x and len(x) > 0 else "Resimsiz Kayıt")
+    
+    col_g1, col_g2 = st.columns([1, 1])
+    
+    # 1. GRAFİK: İsimlere Göre Kayıt Dağılımı (Çubuk Grafik)
+    with col_g1:
+        st.markdown("##### 👤 İsimlere Göre Kayıt İstatistikleri")
+        if "name" in df_chart.columns and not df_chart.empty:
+            name_counts = df_chart["name"].value_counts().reset_index()
+            name_counts.columns = ["İsim", "Kayıt Sayısı"]
+            
+            fig1 = px.bar(
+                name_counts,
+                x="İsim",
+                y="Kayıt Sayısı",
+                color="Kayıt Sayısı",
+                color_continuous_scale="Plasma",
+                text="Kayıt Sayısı",
+                template="plotly_dark"
+            )
+            fig1.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis_title="İsimler",
+                yaxis_title="Kayıt Sayısı",
+                coloraxis_showscale=False
+            )
+            fig1.update_traces(textposition='outside')
+            st.plotly_chart(fig1, use_container_width=True)
+
+    # 2. GRAFİK: Resimli vs Resimsiz Kayıt Dağılımı (Donut / Pasta Grafik)
+    with col_g2:
+        st.markdown("##### 🖼️ Resimli vs Resimsiz Kayıt Oranı")
+        img_counts = df_chart["Görsel Durumu"].value_counts().reset_index()
+        img_counts.columns = ["Durum", "Sayı"]
         
-        fig = px.bar(
-            name_counts,
-            x="İsim",
-            y="Kayıt Sayısı",
-            color="Kayıt Sayısı",
-            color_continuous_scale="Plasma",
-            text="Kayıt Sayısı",
+        fig2 = px.pie(
+            img_counts,
+            values="Sayı",
+            names="Durum",
+            hole=0.4,
+            color="Durum",
+            color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"},
             template="plotly_dark"
         )
-        
-        fig.update_layout(
+        fig2.update_layout(
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            xaxis_title="İsimler",
-            yaxis_title="Kayıt Sayısı",
-            coloraxis_showscale=False
+            font=dict(color="white")
         )
-        
-        fig.update_traces(textposition='outside')
-        
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Grafik için yeterli veri bulunmuyor.")
+        st.plotly_chart(fig2, use_container_width=True)
+
 else:
     st.info("Henüz istatistik oluşturulacak kayıt yok.")
 
