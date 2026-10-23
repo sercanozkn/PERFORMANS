@@ -16,19 +16,22 @@ def init_connection() -> Client:
 
 supabase = init_connection()
 
-# --- GÜVENLİ VERİ FONKSİYONLARI ---
+# --- VERİ FONKSİYONLARI ---
 def load_records():
     try:
         response = supabase.table("notes_records").select("*").execute()
         return response.data if response.data else []
-    except:
+    except Exception as e:
+        st.error(f"Kayıtlar yüklenirken hata: {e}")
         return []
 
 def save_record_to_db(record_data):
     try:
-        supabase.table("notes_records").insert(record_data).execute()
+        response = supabase.table("notes_records").insert(record_data).execute()
+        return response
     except Exception as e:
-        st.error(f"Kayıt eklenemedi: {e}")
+        st.error(f"SUPABASE EKLEME HATASI: {e}")
+        return None
 
 def delete_record_from_db(record_id):
     try:
@@ -47,12 +50,6 @@ def load_config():
         return {"admin_password": "1234"}
     except:
         return {"admin_password": "1234"}
-
-def save_config_to_db(key, value):
-    try:
-        supabase.table("notes_config").upsert({"key": key, "value": value}).execute()
-    except:
-        pass
 
 # --- OTURUM ---
 if "authenticated" not in st.session_state:
@@ -101,25 +98,31 @@ with st.form("entry_form", clear_on_submit=True):
     note = st.text_area("Not / Açıklama:")
     uploaded_files = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
     
-    if st.form_submit_button(label="Tabloya Ekle") and name and note:
-        image_path = None
-        if uploaded_files:
-            uf = uploaded_files[0] # İlk resmi alalım
-            image_path = os.path.join(UPLOAD_DIR, uf.name)
-            with open(image_path, "wb") as f:
-                f.write(uf.getbuffer())
-        
-        # Supabase tablosundaki sütunlarla birebir uyumlu veri paketi
-        new_item = {
-            "name": name,
-            "date": str(date),
-            "note": note,
-            "image_path": image_path,
-            "has_image": bool(image_path)
-        }
-        save_record_to_db(new_item)
-        st.success("Kayıt başarıyla buluta eklendi!")
-        st.rerun()
+    submit_btn = st.form_submit_button(label="Tabloya Ekle")
+    
+    if submit_btn:
+        if name and note:
+            image_path = None
+            if uploaded_files:
+                uf = uploaded_files[0]
+                image_path = os.path.join(UPLOAD_DIR, uf.name)
+                with open(image_path, "wb") as f:
+                    f.write(uf.getbuffer())
+            
+            new_item = {
+                "name": name,
+                "date": str(date),
+                "note": note,
+                "image_path": image_path,
+                "has_image": bool(image_path)
+            }
+            
+            res = save_record_to_db(new_item)
+            if res is not None:
+                st.success("Kayıt başarıyla buluta eklendi!")
+                st.rerun()
+        else:
+            st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
 # --- TABLO ---
 st.markdown("---")
