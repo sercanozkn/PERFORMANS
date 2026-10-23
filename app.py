@@ -67,7 +67,7 @@ if not check_password():
 
 # --- ANA UYGULAMA ---
 st.title("📄 Notes - Hata ve Kayıt Takip Paneli")
-st.success("🟢 Kararlı Lokal Mod Aktif (Resimli/Resimsiz Ayrı Grafikler)")
+st.success("🟢 Kararlı Lokal Mod Aktif (Tekli Resim ve Ortak Grafik)")
 st.markdown("---")
 
 if st.sidebar.button("Çıkış Yap"):
@@ -100,8 +100,8 @@ if editing_record:
     e_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY", key="edit_date")
     e_note = st.text_area("Not / Açıklama:", value=editing_record.get("note", ""), key="edit_note")
     
-    # Düzenleme modunda resim güncelleme
-    e_uploaded_files = st.file_uploader("Files & media (Yeni Resim Yükle - İsteğe Bağlı):", type=["jpg", "jpeg", "png"], key="edit_file")
+    # Tekli resim yükleme (Düzenleme)
+    e_uploaded_file = st.file_uploader("Files & media (Yeni Resim Yükle - Tek Dosya):", type=["jpg", "jpeg", "png"], accept_multiple_files=False, key="edit_file")
     
     col_up1, col_up2 = st.columns(2)
     with col_up1:
@@ -109,11 +109,10 @@ if editing_record:
             image_path = editing_record.get("image_path")
             has_img = editing_record.get("has_image", False)
             
-            if e_uploaded_files:
-                uf = e_uploaded_files
-                image_path = os.path.join(UPLOAD_DIR, uf.name)
+            if e_uploaded_file is not None:
+                image_path = os.path.join(UPLOAD_DIR, e_uploaded_file.name)
                 with open(image_path, "wb") as f:
-                    f.write(uf.getbuffer())
+                    f.write(e_uploaded_file.getbuffer())
                 has_img = True
                 
             for r in records:
@@ -137,17 +136,18 @@ else:
     name = st.text_input("Text (İsim):", key="new_name")
     date = st.date_input("Date (Tarih):", format="DD/MM/YYYY", key="new_date")
     note = st.text_area("Not / Açıklama:", key="new_note")
-    uploaded_files = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="new_file")
+    
+    # Tekli resim yükleme (Yeni Kayıt - accept_multiple_files=False)
+    uploaded_file = st.file_uploader("Files & media (Resim Yükle - Tek Dosya):", type=["jpg", "jpeg", "png"], accept_multiple_files=False, key="new_file")
     
     if st.button("Tabloya Ekle", type="primary"):
         if name and note:
             image_path = None
             has_img = False
-            if uploaded_files:
-                uf = uploaded_files[0]
-                image_path = os.path.join(UPLOAD_DIR, uf.name)
+            if uploaded_file is not None:
+                image_path = os.path.join(UPLOAD_DIR, uploaded_file.name)
                 with open(image_path, "wb") as f:
-                    f.write(uf.getbuffer())
+                    f.write(uploaded_file.getbuffer())
                 has_img = True
             
             new_id = int(datetime.now().timestamp() * 1000)
@@ -167,36 +167,19 @@ else:
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- İKİ AYRI GRAFİK BÖLÜMÜ (RESİMLİ / RESİMSİZ) ---
+# --- ORTAK İSİM BAZLI GRAFİK BÖLÜMÜ ---
 st.markdown("---")
-st.subheader("📊 İsim Bazlı İstatistik Grafikleri")
+st.subheader("📊 İsim Bazlı Toplam İstatistik Grafiği")
 
 if records:
     df_chart = pd.DataFrame(records)
-    
-    col_g1, col_g2 = st.columns(2)
-    
-    with col_g1:
-        st.markdown("### 🖼️ Resimli Kayıtlar")
-        df_with_img = df_chart[df_chart["has_image"] == True] if "has_image" in df_chart.columns else pd.DataFrame()
-        if not df_with_img.empty and "name" in df_with_img.columns:
-            img_counts = df_with_img["name"].value_counts().reset_index()
-            img_counts.columns = ["İsim", "Kayıt Sayısı"]
-            img_counts = img_counts.set_index("İsim")
-            st.bar_chart(img_counts)
-        else:
-            st.info("Resimli kayıt bulunmuyor.")
-            
-    with col_g2:
-        st.markdown("### 📄 Resimsiz Kayıtlar")
-        df_without_img = df_chart[df_chart["has_image"] != True] if "has_image" in df_chart.columns else df_chart
-        if not df_without_img.empty and "name" in df_without_img.columns:
-            no_img_counts = df_without_img["name"].value_counts().reset_index()
-            no_img_counts.columns = ["İsim", "Kayıt Sayısı"]
-            no_img_counts = no_img_counts.set_index("İsim")
-            st.bar_chart(no_img_counts)
-        else:
-            st.info("Resimsiz kayıt bulunmuyor.")
+    if "name" in df_chart.columns and not df_chart.empty:
+        name_counts = df_chart["name"].value_counts().reset_index()
+        name_counts.columns = ["İsim", "Kayıt Sayısı"]
+        name_counts = name_counts.set_index("İsim")
+        st.bar_chart(name_counts)
+    else:
+        st.info("Grafik için yeterli veri bulunmuyor.")
 else:
     st.info("Henüz istatistik oluşturulacak kayıt yok.")
 
