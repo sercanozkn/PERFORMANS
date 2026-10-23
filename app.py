@@ -10,10 +10,6 @@ st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 def init_connection() -> Client:
     url = st.secrets["SUPABASE_URL"].strip()
     key = st.secrets["SUPABASE_KEY"].strip()
-    
-    # GEÇİCİ KONTROL: URL'in ne olduğunu ekrana yazdıralım
-    st.write(f"Okunan URL: '{url}'") 
-    
     return create_client(url, key)
 
 supabase = init_connection()
@@ -37,7 +33,6 @@ def load_config():
     try:
         response = supabase.table("notes_config").select("*").execute()
         if response.data:
-            # Konfigürasyon verisini düzenle
             config_dict = {}
             for row in response.data:
                 config_dict[row.get("key")] = row.get("value")
@@ -55,9 +50,8 @@ def save_config(key, value):
 # --- KULLANICI GİRİŞ KONTROLÜ ---
 def check_password():
     def password_entered():
-        # Varsayılan şifre kontrolü veya config tablosundan okuma
         config = load_config()
-        admin_pass = config.get("admin_password", "1234") # Varsayılan şifre 1234
+        admin_pass = config.get("admin_password", "1234")
         
         if st.session_state["username"] == "admin" and st.session_state["password"] == admin_pass:
             st.session_state["password_correct"] = True
@@ -92,7 +86,6 @@ st.success("🟢 Bulut Veritabanı (Supabase) Bağlantısı Aktif!")
 
 records = load_records()
 
-# Örnek veri ekleme ve arayüz alanları
 st.subheader("Kayıtlar")
 if records:
     df = pd.DataFrame(records)
