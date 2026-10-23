@@ -235,14 +235,16 @@ st.subheader("📊 İstatistikler ve Grafikler")
 if records:
     df_chart = pd.DataFrame(records)
     
-    # Resim Var / Yok Bilgisini Belirleme
-    df_chart["Görsel Durumu"] = df_chart["image_paths"].apply(lambda x: "Resimli Kayıt" if x and len(x) > 0 else "Resimsiz Kayıt")
+    # Resim Var / Yok Bilgisini Etiketleme
+    df_chart["Görsel Durumu"] = df_chart["image_paths"].apply(
+        lambda x: "Resimli Kayıt" if isinstance(x, list) and len(x) > 0 else "Resimsiz Kayıt"
+    )
     
     col_g1, col_g2 = st.columns([1, 1])
     
-    # 1. GRAFİK: İsimlere Göre Kayıt Dağılımı (Çubuk Grafik)
+    # 1. GRAFİK: Toplam Kayıt Sayıları
     with col_g1:
-        st.markdown("##### 👤 İsimlere Göre Kayıt İstatistikleri")
+        st.markdown("##### 👤 İsimlere Göre Toplam Kayıt İstatistikleri")
         if "name" in df_chart.columns and not df_chart.empty:
             name_counts = df_chart["name"].value_counts().reset_index()
             name_counts.columns = ["İsim", "Kayıt Sayısı"]
@@ -267,27 +269,32 @@ if records:
             fig1.update_traces(textposition='outside')
             st.plotly_chart(fig1, use_container_width=True)
 
-    # 2. GRAFİK: Resimli vs Resimsiz Kayıt Dağılımı (Donut / Pasta Grafik)
+    # 2. GRAFİK: Kişilere Göre Resimli ve Resimsiz Kayıt Dağılımı (Kişi İsimli)
     with col_g2:
-        st.markdown("##### 🖼️ Resimli vs Resimsiz Kayıt Oranı")
-        img_counts = df_chart["Görsel Durumu"].value_counts().reset_index()
-        img_counts.columns = ["Durum", "Sayı"]
-        
-        fig2 = px.pie(
-            img_counts,
-            values="Sayı",
-            names="Durum",
-            hole=0.4,
-            color="Durum",
-            color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"},
-            template="plotly_dark"
-        )
-        fig2.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white")
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.markdown("##### 🖼️ İsimlere Göre Resimli / Resimsiz Detaylı Dağılım")
+        if "name" in df_chart.columns and not df_chart.empty:
+            person_img_counts = df_chart.groupby(["name", "Görsel Durumu"]).size().reset_index(name="Sayı")
+            
+            fig2 = px.bar(
+                person_img_counts,
+                x="name",
+                y="Sayı",
+                color="Görsel Durumu",
+                barmode="group",
+                color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"},
+                text="Sayı",
+                template="plotly_dark"
+            )
+            fig2.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis_title="İsimler",
+                yaxis_title="Kayıt Sayısı",
+                legend_title="Durum"
+            )
+            fig2.update_traces(textposition='outside')
+            st.plotly_chart(fig2, use_container_width=True)
 
 else:
     st.info("Henüz istatistik oluşturulacak kayıt yok.")
