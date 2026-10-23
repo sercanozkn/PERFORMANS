@@ -89,7 +89,6 @@ if editing_record:
     with st.form("edit_form"):
         e_name = st.text_input("Text (İsim):", value=editing_record.get("name", ""))
         
-        # Tarihi Gün/Ay/Yıl formatında okuma
         date_str = editing_record.get("date", datetime.now().strftime("%d/%m/%Y"))
         try:
             default_date = datetime.strptime(date_str, "%d/%m/%Y").date()
@@ -124,50 +123,3 @@ if editing_record:
 else:
     with st.form("entry_form", clear_on_submit=True):
         st.subheader("➕ Yeni Kayıt / Hata Ekle")
-        name = st.text_input("Text (İsim):")
-        date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
-        note = st.text_area("Not / Açıklama:")
-        uploaded_files = st.file_uploader("Files & media (Resim Yükle):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-        
-        submit_btn = st.form_submit_button(label="Tabloya Ekle")
-        
-        if submit_btn:
-            if name and note:
-                image_path = None
-                if uploaded_files:
-                    uf = uploaded_files[0]
-                    image_path = os.path.join(UPLOAD_DIR, uf.name)
-                    with open(image_path, "wb") as f:
-                        f.write(uf.getbuffer())
-                
-                new_id = int(datetime.now().timestamp() * 1000)
-                new_item = {
-                    "id": new_id,
-                    "name": name,
-                    "date": date.strftime("%d/%m/%Y"), # Gün/Ay/Yıl olarak kaydetme
-                    "note": note,
-                    "image_path": image_path,
-                    "has_image": bool(image_path)
-                }
-                
-                records.append(new_item)
-                save_records(records)
-                st.success("Kayıt başarıyla eklendi!")
-                st.rerun()
-            else:
-                st.warning("Lütfen İsim-Soyisim ve Not alanlarını doldurun.")
-
-# --- GRAFİK / İSTATİSTİK BÖLÜMÜ ---
-st.markdown("---")
-st.subheader("📊 Grafik / İstatistikler")
-if records:
-    df_chart = pd.DataFrame(records)
-    if "date" in df_chart.columns and not df_chart.empty:
-        date_counts = df_chart["date"].value_counts().reset_index()
-        date_counts.columns = ["Tarih", "Kayıt Sayısı"]
-        date_counts = date_counts.set_index("Tarih")
-        st.bar_chart(date_counts)
-    else:
-        st.info("Grafik için yeterli veri bulunmuyor.")
-else:
-    st.info("Henüz istatistik oluşturulacak kayıt yok
