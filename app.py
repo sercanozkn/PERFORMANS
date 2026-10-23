@@ -235,14 +235,12 @@ st.subheader("📊 İstatistikler ve Grafikler")
 if records:
     df_chart = pd.DataFrame(records)
     
-    # Resim Var / Yok Bilgisini Etiketleme
     df_chart["Görsel Durumu"] = df_chart["image_paths"].apply(
         lambda x: "Resimli Kayıt" if isinstance(x, list) and len(x) > 0 else "Resimsiz Kayıt"
     )
     
     col_g1, col_g2 = st.columns([1, 1])
     
-    # 1. GRAFİK: Toplam Kayıt Sayıları
     with col_g1:
         st.markdown("##### 👤 İsimlere Göre Toplam Kayıt İstatistikleri")
         if "name" in df_chart.columns and not df_chart.empty:
@@ -269,7 +267,6 @@ if records:
             fig1.update_traces(textposition='outside')
             st.plotly_chart(fig1, use_container_width=True)
 
-    # 2. GRAFİK: Kişilere Göre Resimli ve Resimsiz Kayıt Dağılımı (Kişi İsimli)
     with col_g2:
         st.markdown("##### 🖼️ İsimlere Göre Resimli / Resimsiz Detaylı Dağılım")
         if "name" in df_chart.columns and not df_chart.empty:
@@ -369,11 +366,17 @@ if filtered_records:
         with col3:
             img_paths = record.get('image_paths', [])
             if img_paths:
-                for idx, img_p in enumerate(img_paths):
-                    if os.path.exists(img_p):
-                        if st.button(f"🔍 Büyüt {idx+1}", key=f"zoom_{record.get('id', 0)}_{idx}"):
-                            show_image_modal(img_p, f"{record.get('name')} - Görsel {idx+1}")
-                        st.image(img_p, width=50)
+                # Minyatürleri en fazla 3'lü satırlar halinde yan yana dizayn ediyoruz
+                for i in range(0, len(img_paths), 3):
+                    row_imgs = img_paths[i:i+3]
+                    thumb_cols = st.columns(len(row_imgs))
+                    for sub_idx, img_p in enumerate(row_imgs):
+                        global_idx = i + sub_idx
+                        if os.path.exists(img_p):
+                            with thumb_cols[sub_idx]:
+                                st.image(img_p, width=45)
+                                if st.button("🔍", key=f"zoom_{record.get('id', 0)}_{global_idx}", help=f"Görsel {global_idx+1} Büyüt"):
+                                    show_image_modal(img_p, f"{record.get('name')} - Görsel {global_idx+1}")
             else:
                 st.write("-")
         with col4:
