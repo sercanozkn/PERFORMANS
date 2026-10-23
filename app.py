@@ -8,8 +8,8 @@ st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 # --- SUPABASE BAĞLANTISI ---
 @st.cache_resource
 def init_connection() -> Client:
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
+    url = st.secrets["SUPABASE_URL"].strip()
+    key = st.secrets["SUPABASE_KEY"].strip()
     return create_client(url, key)
 
 supabase = init_connection()
