@@ -1,68 +1,43 @@
 import streamlit as st
 import os
-import time
+import json
 import pandas as pd
-from collections import Counter
-from supabase import create_client, Client
+from datetime import datetime
 
 # --- SAYFA AYARI ---
-st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
+st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide")
 
-# --- SUPABASE BULUT BAĞLANTISI (YENİDEN DENEME MEKANİZMASI İLE) ---
-@st.cache_resource
-def init_connection() -> Client:
-    url = st.secrets["SUPABASE_URL"].strip()
-    key = st.secrets["SUPABASE_KEY"].strip()
-    return create_client(url, key)
+# --- LOKAL VERİTABANI DOSYASI ---
+DB_FILE = "notes_database.json"
+CONFIG_FILE = "notes_config.json"
+UPLOAD_DIR = "uploaded_images"
 
-# --- GÜVENLİ VERİ ÇEKME (DNS / AĞ KESİNTİLERİNE KARŞI DİRENÇLİ) ---
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
 def load_records():
-    for attempt in range(3):
+    if os.path.exists(DB_FILE):
         try:
-            client = init_connection()
-            response = client.table("notes_records").select("*").execute()
-            return response.data if response.data else []
-        except Exception as e:
-            time.sleep(1) # Ağ kesintisinde 1 saniye bekleip tekrar dener
-    st.error("Supabase ağına erişilemiyor. Lütfen internet/Codespaces bağlantısını kontrol edin.")
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return []
     return []
 
-# --- GÜVENLİ KAYIT EKLEME ---
-def save_record_to_db(record_data):
-    for attempt in range(3):
-        try:
-            client = init_connection()
-            response = client.table("notes_records").insert(record_data).execute()
-            return response
-        except Exception as e:
-            time.sleep(1)
-            if attempt == 2:
-                st.error(f"SUPABASE EKLEME HATASI: {e}")
-    return None
+def save_records(records):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=4)
 
-# --- GÜVENLİ KAYIT SİLME ---
-def delete_record_from_db(record_id):
-    try:
-        client = init_connection()
-        client.table("notes_records").delete().eq("id", record_id).execute()
-    except Exception as e:
-        st.error(f"Kayıt silinemedi: {e}")
-
-# --- AYARLARI YÜKLEME ---
 def load_config():
-    try:
-        client = init_connection()
-        response = client.table("notes_config").select("*").execute()
-        if response.data:
-            config_dict = {}
-            for row in response.data:
-                config_dict[row.get("key")] = row.get("value")
-            return config_dict
-        return {"admin_password": "1234"}
-    except:
-        return {"admin_password": "1234"}
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {"admin_password": "1234"}
+    return {"admin_password": "1234"}
 
-# --- OTURUM AYARLARI ---
+# --- OTURUM ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -89,12 +64,8 @@ if not check_password():
     st.stop()
 
 # --- ANA UYGULAMA ---
-UPLOAD_DIR = "uploaded_images"
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-
-st.title("📄 Notes - Hata Takip Paneli")
-st.success("🟢 Sistem Hazır - Kayıtlarınızı ekleyebilirsiniz.")
+st.title("📄 Notes - Kesintisiz Takip Paneli")
+st.success("🟢 Sistem Kararlı Çalışıyor - Lokal Mod Aktif.")
 st.markdown("---")
 
 if st.sidebar.button("Çıkış Yap"):
@@ -120,7 +91,11 @@ with st.form("entry_form", clear_on_submit=True):
                 with open(image_path, "wb") as f:
                     f.write(uf.getbuffer())
             
+            records = load_records()
+            new_id = int(datetime.now().timestamp() * 1000)
+            
             new_item = {
+                "id": new_id,
                 "name": name,
                 "date": str(date),
                 "note": note,
@@ -128,10 +103,10 @@ with st.form("entry_form", clear_on_submit=True):
                 "has_image": bool(image_path)
             }
             
-            res = save_record_to_db(new_item)
-            if res is not None:
-                st.success("Kayıt başarıyla buluta eklendi!")
-                st.rerun()
+            records.append(new_item)
+            save_records(records)
+            st.success("Kayıt başarıyla eklendi!")
+            st.rerun()
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
@@ -141,7 +116,7 @@ st.subheader("📋 All notes (Kayıt ve Hata Tablosu)")
 records = load_records()
 
 if records:
-    for idx, record in enumerate(records):
+    for record in records:
         col1, col2, col3, col4 = st.columns([2, 3, 2, 1])
         with col1:
             st.markdown(f"**{record.get('name', '')}**")
@@ -155,8 +130,9 @@ if records:
             else:
                 st.write("-")
         with col4:
-            if st.button("🗑️ Sil", key=f"del_{record.get('id', idx)}"):
-                delete_record_from_db(record.get("id"))
+            if st.button("🗑️ Sil", key=f"del_{record.get('id')}"):
+                updated_records = [r for r in records if r.get('id') != record.get('id')]
+                save_records(updated_records)
                 st.rerun()
         st.markdown("---")
 else:
