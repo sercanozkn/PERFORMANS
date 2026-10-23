@@ -149,16 +149,16 @@ else:
         else:
             st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- GRAFİK / İSTATİSTİK BÖLÜMÜ ---
+# --- İSME GÖRE GRAFİK / İSTATİSTİK BÖLÜMÜ ---
 st.markdown("---")
-st.subheader("📊 Grafik / İstatistikler")
+st.subheader("📊 İsimlere Göre Kayıt İstatistikleri")
 if records:
     df_chart = pd.DataFrame(records)
-    if "date" in df_chart.columns and not df_chart.empty:
-        date_counts = df_chart["date"].value_counts().reset_index()
-        date_counts.columns = ["Tarih", "Kayıt Sayısı"]
-        date_counts = date_counts.set_index("Tarih")
-        st.bar_chart(date_counts)
+    if "name" in df_chart.columns and not df_chart.empty:
+        name_counts = df_chart["name"].value_counts().reset_index()
+        name_counts.columns = ["İsim", "Kayıt Sayısı"]
+        name_counts = name_counts.set_index("İsim")
+        st.bar_chart(name_counts)
     else:
         st.info("Grafik için yeterli veri bulunmuyor.")
 else:
