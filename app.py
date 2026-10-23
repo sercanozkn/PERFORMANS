@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import time
 import pandas as pd
 from collections import Counter
 from supabase import create_client, Client
@@ -7,41 +8,51 @@ from supabase import create_client, Client
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 
-# --- SUPABASE BULUT BAĞLANTISI ---
+# --- SUPABASE BULUT BAĞLANTISI (YENİDEN DENEME MEKANİZMASI İLE) ---
 @st.cache_resource
 def init_connection() -> Client:
     url = st.secrets["SUPABASE_URL"].strip()
     key = st.secrets["SUPABASE_KEY"].strip()
     return create_client(url, key)
 
-supabase = init_connection()
-
-# --- VERİ FONKSİYONLARI ---
+# --- GÜVENLİ VERİ ÇEKME (DNS / AĞ KESİNTİLERİNE KARŞI DİRENÇLİ) ---
 def load_records():
-    try:
-        response = supabase.table("notes_records").select("*").execute()
-        return response.data if response.data else []
-    except Exception as e:
-        st.error(f"Kayıtlar yüklenirken hata: {e}")
-        return []
+    for attempt in range(3):
+        try:
+            client = init_connection()
+            response = client.table("notes_records").select("*").execute()
+            return response.data if response.data else []
+        except Exception as e:
+            time.sleep(1) # Ağ kesintisinde 1 saniye bekleip tekrar dener
+    st.error("Supabase ağına erişilemiyor. Lütfen internet/Codespaces bağlantısını kontrol edin.")
+    return []
 
+# --- GÜVENLİ KAYIT EKLEME ---
 def save_record_to_db(record_data):
-    try:
-        response = supabase.table("notes_records").insert(record_data).execute()
-        return response
-    except Exception as e:
-        st.error(f"SUPABASE EKLEME HATASI: {e}")
-        return None
+    for attempt in range(3):
+        try:
+            client = init_connection()
+            response = client.table("notes_records").insert(record_data).execute()
+            return response
+        except Exception as e:
+            time.sleep(1)
+            if attempt == 2:
+                st.error(f"SUPABASE EKLEME HATASI: {e}")
+    return None
 
+# --- GÜVENLİ KAYIT SİLME ---
 def delete_record_from_db(record_id):
     try:
-        supabase.table("notes_records").delete().eq("id", record_id).execute()
+        client = init_connection()
+        client.table("notes_records").delete().eq("id", record_id).execute()
     except Exception as e:
         st.error(f"Kayıt silinemedi: {e}")
 
+# --- AYARLARI YÜKLEME ---
 def load_config():
     try:
-        response = supabase.table("notes_config").select("*").execute()
+        client = init_connection()
+        response = client.table("notes_config").select("*").execute()
         if response.data:
             config_dict = {}
             for row in response.data:
@@ -51,11 +62,11 @@ def load_config():
     except:
         return {"admin_password": "1234"}
 
-# --- OTURUM ---
+# --- OTURUM AYARLARI ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# --- GİRİŞ ---
+# --- GİRİŞ KONTROLÜ ---
 def check_password():
     config = load_config()
     admin_pass = config.get("admin_password", "1234")
