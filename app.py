@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 import uuid
 import streamlit as st
+import plotly.express as px
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide", page_icon="📝")
@@ -199,7 +200,6 @@ if editing_record:
 
 else:
     with st.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
-        # Form kullanılarak ekleme sonrası alanların otomatik temizlenmesi sağlandı
         with st.form("new_record_form", clear_on_submit=True):
             name = st.text_input("Text (İsim):")
             date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
@@ -226,9 +226,9 @@ else:
                     st.success("Kayıt başarıyla eklendi!")
                     st.rerun()
                 else:
-                    st.warning("Lütfen İsim ve Not alanlarını doldurun.")
+                    st.warning("Lütfen İsim dan ve Not alanlarını doldurun.")
 
-# --- İSME GÖRE GRAFİK / İSTATİSTİK BÖLÜMÜ ---
+# --- PLOTLY İLE MODERN İSTATİSTİK / GRAFİK BÖLÜMÜ ---
 st.markdown("---")
 st.subheader("📊 İsimlere Göre Kayıt İstatistikleri")
 if records:
@@ -236,8 +236,30 @@ if records:
     if "name" in df_chart.columns and not df_chart.empty:
         name_counts = df_chart["name"].value_counts().reset_index()
         name_counts.columns = ["İsim", "Kayıt Sayısı"]
-        name_counts = name_counts.set_index("İsim")
-        st.bar_chart(name_counts)
+        
+        # Plotly ile modern, renkli ve koyu temalı interaktif grafik
+        fig = px.bar(
+            name_counts,
+            x="İsim",
+            y="Kayıt Sayısı",
+            color="Kayıt Sayısı",
+            color_continuous_scale="Plasma",  # Neon / Canlı renk geçişi (Plasma, Viridis, Rainbow vb.)
+            text="Kayıt Sayısı",
+            template="plotly_dark"
+        )
+        
+        fig.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="white"),
+            xaxis_title="İsimler",
+            yaxis_title="Kayıt Sayısı",
+            coloraxis_showscale=False
+        )
+        
+        fig.update_traces(textposition='outside')
+        
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Grafik için yeterli veri bulunmuyor.")
 else:
@@ -325,18 +347,4 @@ if filtered_records:
                 st.session_state.edit_id = record.get('id')
                 st.rerun()
         with col5:
-            if st.button("🗑️ Sil", key=f"del_{record.get('id', 0)}"):
-                imgs_to_delete = record.get('image_paths', [])
-                for img_to_delete in imgs_to_delete:
-                    if img_to_delete and os.path.exists(img_to_delete):
-                        try: os.remove(img_to_delete)
-                        except: pass
-
-                records = [r for r in records if r.get('id') != record.get('id')]
-                save_records(records)
-                if st.session_state.edit_id == record.get('id'):
-                    st.session_state.edit_id = None
-                st.rerun()
-        st.markdown("---")
-else:
-    st.info("Aramanıza uygun veya henüz eklenmiş bir kayıt bulunmuyor.")
+            if st.button("🗑️ Sil", key=f"del_{record.get('id',
