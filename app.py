@@ -10,6 +10,10 @@ st.set_page_config(page_title="Notes - Hata Yönetim Sistemi", layout="wide")
 def init_connection() -> Client:
     url = st.secrets["SUPABASE_URL"].strip()
     key = st.secrets["SUPABASE_KEY"].strip()
+    
+    # GEÇİCİ KONTROL: URL'in ne olduğunu ekrana yazdıralım
+    st.write(f"Okunan URL: '{url}'") 
+    
     return create_client(url, key)
 
 supabase = init_connection()
