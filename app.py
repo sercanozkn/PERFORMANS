@@ -141,7 +141,7 @@ with st.sidebar:
                 st.error("Hatalı şifre!")
 
 # --- ANA EKRAN ---
-st.title("📋 Notes - Hata dan Kayıt Takip Paneli")
+st.title("📋 Notes - Hata ve Kayıt Takip Paneli")
 st.markdown("---")
 
 # Modal / Görsel Büyütme Fonksiyonu
@@ -172,4 +172,29 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle" if not edit_record else "✏️ K
         f_date = st.date_input("Date (Tarih):", value=default_date)
         f_note = st.text_area("Not / Açıklama:", value=default_note)
         
-        f_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "png", "jpeg"], accept_multiple_files=
+        f_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+        
+        if edit_record and default_images:
+            st.markdown("**Mevcut Yüklü Görseller:**")
+            cols_prev = st.columns(min(len(default_images), 4))
+            keep_images = []
+            for idx, img_p in enumerate(default_images):
+                if os.path.exists(img_p) and os.path.isfile(img_p):
+                    with cols_prev[idx % 4]:
+                        st.image(img_p, width=70)
+                        if st.checkbox(f"Koru #{idx+1}", value=True, key=f"keep_{edit_record.get('id')}_{idx}"):
+                            keep_images.append(img_p)
+                else:
+                    if os.path.exists(img_p):
+                        try:
+                            os.remove(img_p)
+                        except:
+                            pass
+
+        submit_label = "Güncelle" if edit_record else "Tabloya Ekle"
+        submitted = st.form_submit_button(submit_label)
+        
+        if submitted:
+            if not f_name.strip():
+                st.error("Lütfen 'Text (İsim)' alanını boş bırakmayın.")
+            else:
