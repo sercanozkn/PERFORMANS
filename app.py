@@ -230,37 +230,69 @@ else:
 
 # --- PLOTLY İLE MODERN İSTATİSTİK / GRAFİK BÖLÜMÜ ---
 st.markdown("---")
-st.subheader("📊 İsimlere Göre Kayıt İstatistikleri")
+st.subheader("📊 İstatistikler ve Grafikler")
+
 if records:
     df_chart = pd.DataFrame(records)
-    if "name" in df_chart.columns and not df_chart.empty:
-        name_counts = df_chart["name"].value_counts().reset_index()
-        name_counts.columns = ["İsim", "Kayıt Sayısı"]
-        
-        fig = px.bar(
-            name_counts,
-            x="İsim",
-            y="Kayıt Sayısı",
-            color="Kayıt Sayısı",
-            color_continuous_scale="Plasma",
-            text="Kayıt Sayısı",
-            template="plotly_dark"
-        )
-        
-        fig.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            xaxis_title="İsimler",
-            yaxis_title="Kayıt Sayısı",
-            coloraxis_showscale=False
-        )
-        
-        fig.update_traces(textposition='outside')
-        
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Grafik için yeterli veri bulunmuyor.")
+    
+    df_chart["Görsel Durumu"] = df_chart["image_paths"].apply(
+        lambda x: "Resimli Kayıt" if isinstance(x, list) and len(x) > 0 else "Resimsiz Kayıt"
+    )
+    
+    col_g1, col_g2 = st.columns([1, 1])
+    
+    with col_g1:
+        st.markdown("##### 👤 İsimlere Göre Toplam Kayıt İstatistikleri")
+        if "name" in df_chart.columns and not df_chart.empty:
+            name_counts = df_chart["name"].value_counts().reset_index()
+            name_counts.columns = ["İsim", "Kayıt Sayısı"]
+            
+            fig1 = px.bar(
+                name_counts,
+                x="İsim",
+                y="Kayıt Sayısı",
+                color="Kayıt Sayısı",
+                color_continuous_scale="Plasma",
+                text="Kayıt Sayısı",
+                template="plotly_dark"
+            )
+            fig1.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis_title="İsimler",
+                yaxis_title="Kayıt Sayısı",
+                coloraxis_showscale=False
+            )
+            fig1.update_traces(textposition='outside')
+            st.plotly_chart(fig1, use_container_width=True)
+
+    with col_g2:
+        st.markdown("##### 🖼️ İsimlere Göre Resimli / Resimsiz Detaylı Dağılım")
+        if "name" in df_chart.columns and not df_chart.empty:
+            person_img_counts = df_chart.groupby(["name", "Görsel Durumu"]).size().reset_index(name="Sayı")
+            
+            fig2 = px.bar(
+                person_img_counts,
+                x="name",
+                y="Sayı",
+                color="Görsel Durumu",
+                barmode="group",
+                color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"},
+                text="Sayı",
+                template="plotly_dark"
+            )
+            fig2.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis_title="İsimler",
+                yaxis_title="Kayıt Sayısı",
+                legend_title="Durum"
+            )
+            fig2.update_traces(textposition='outside')
+            st.plotly_chart(fig2, use_container_width=True)
+
 else:
     st.info("Henüz istatistik oluşturulacak kayıt yok.")
 
@@ -334,11 +366,17 @@ if filtered_records:
         with col3:
             img_paths = record.get('image_paths', [])
             if img_paths:
-                for idx, img_p in enumerate(img_paths):
-                    if os.path.exists(img_p):
-                        if st.button(f"🔍 Büyüt {idx+1}", key=f"zoom_{record.get('id', 0)}_{idx}"):
-                            show_image_modal(img_p, f"{record.get('name')} - Görsel {idx+1}")
-                        st.image(img_p, width=50)
+                # Minyatürleri en fazla 3'lü satırlar halinde yan yana dizayn ediyoruz
+                for i in range(0, len(img_paths), 3):
+                    row_imgs = img_paths[i:i+3]
+                    thumb_cols = st.columns(len(row_imgs))
+                    for sub_idx, img_p in enumerate(row_imgs):
+                        global_idx = i + sub_idx
+                        if os.path.exists(img_p):
+                            with thumb_cols[sub_idx]:
+                                st.image(img_p, width=45)
+                                if st.button("🔍", key=f"zoom_{record.get('id', 0)}_{global_idx}", help=f"Görsel {global_idx+1} Büyüt"):
+                                    show_image_modal(img_p, f"{record.get('name')} - Görsel {global_idx+1}")
             else:
                 st.write("-")
         with col4:
