@@ -37,6 +37,9 @@ def load_records():
         for r in records:
             if "image_path" in r and "image_paths" not in r:
                 r["image_paths"] = [r["image_path"]] if r["image_path"] else []
+            # Eski lokal yolları filtrele, sadece http ile başlayan bulut URL'lerini tut
+            if "image_paths" in r and isinstance(r["image_paths"], list):
+                r["image_paths"] = [p for p in r["image_paths"] if p and str(p).startswith("http")]
         return records
     except Exception as e:
         st.error(f"Veri yüklenirken hata oluştu: {e}")
