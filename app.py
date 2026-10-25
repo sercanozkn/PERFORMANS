@@ -141,7 +141,7 @@ with st.sidebar:
                 st.error("Hatalı şifre!")
 
 # --- ANA EKRAN ---
-st.title("📋 Notes - Hata ve Kayıt Takip Paneli")
+st.title("📋 Notes - Hata dan Kayıt Takip Paneli")
 st.markdown("---")
 
 # Modal / Görsel Büyütme Fonksiyonu
@@ -198,3 +198,138 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle" if not edit_record else "✏️ K
             if not f_name.strip():
                 st.error("Lütfen 'Text (İsim)' alanını boş bırakmayın.")
             else:
+                date_str = f_date.strftime("%d/%m/%Y")
+                final_image_paths = keep_images if edit_record else []
+                
+                if f_files:
+                    for uploaded_file in f_files:
+                        file_ext = os.path.splitext(uploaded_file.name)[1]
+                        unique_filename = f"{uuid.uuid4()}{file_ext}"
+                        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+                        with open(file_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        final_image_paths.append(file_path)
+                
+                if edit_record:
+                    if update_record_db(edit_record.get("id"), f_name, date_str, f_note, final_image_paths):
+                        st.success("Kayıt başarıyla güncellendi!")
+                        st.session_state.edit_id = None
+                        st.rerun()
+                else:
+                    if save_record_db(f_name, date_str, f_note, final_image_paths):
+                        st.success("Kayıt başarıyla eklendi!")
+                        st.rerun()
+
+        if edit_record:
+            if st.form_submit_button("İptal Et"):
+                st.session_state.edit_id = None
+                st.rerun()
+
+st.markdown("---")
+
+# --- ARAMA VE FİLTRELEME ---
+records = load_records()
+
+col_s1, col_s2 = st.columns([2, 1])
+with col_s1:
+    search_query = st.text_input("🔍 Kayıtlarda Ara (İsim veya Not):", "")
+with col_s2:
+    sort_order = st.selectbox("Sıralama:", ["Yeniden Eskiye", "Eskiden Yeniye"])
+
+filtered_records = []
+for r in records:
+    if search_query.lower() in r.get("name", "").lower() or search_query.lower() in r.get("note", "").lower():
+        filtered_records.append(r)
+
+if sort_order == "Eskiden Yeniye":
+    filtered_records = sorted(filtered_records, key=lambda x: x.get("id", 0))
+
+# --- SAYFALAMA ---
+items_per_page = st.selectbox("Sayfa Başına Kayıt:", [5, 10, 20, 50], index=0)
+total_records = len(filtered_records)
+total_pages = (total_records // items_per_page) + (1 if total_records % items_per_page > 0 else 0)
+total_pages = max(total_pages, 1)
+
+page_num = st.number_input("Sayfa", min_value=1, max_value=total_pages, step=1, value=1)
+start_idx = (page_num - 1) * items_per_page
+end_idx = start_idx + items_per_page
+paginated_records = filtered_records[start_idx:end_idx]
+
+st.markdown(f"Toplam **{total_records}** kayıttan **{start_idx+1} - {min(end_idx, total_records)}** arası gösteriliyor. (Sayfa {page_num}/{total_pages})")
+st.markdown("---")
+
+# --- TABLO BAŞLIKLARI ---
+if paginated_records:
+    h1, h2, h3, h4, h5 = st.columns([2, 3, 2, 1, 1])
+    with h1:
+        st.markdown("**İsim & Not**")
+    with h2:
+        st.markdown("**Tarih**")
+    with h3:
+        st.markdown("**Görsel**")
+    with h4:
+        st.markdown("**İşlem**")
+    with h5:
+        st.markdown("**İşlem**")
+    st.markdown("---")
+
+    for record in paginated_records:
+        col1, col2, col3, col4, col5 = st.columns([2, 3, 2, 1, 1])
+        with col1:
+            st.markdown(f"**{record.get('name', '')}**")
+            st.caption(f"{record.get('note', '')}")
+        with col2:
+            st.write(record.get('date', ''))
+        with col3:
+            img_paths = record.get('image_paths', [])
+            if img_paths:
+                for i in range(0, len(img_paths), 3):
+                    row_imgs = img_paths[i:i+3]
+                    thumb_cols = st.columns(len(row_imgs))
+                    for sub_idx, img_p in enumerate(row_imgs):
+                        global_idx = i + sub_idx
+                        if os.path.exists(img_p) and os.path.isfile(img_p):
+                            with thumb_cols[sub_idx]:
+                                st.image(img_p, width=45)
+                                if st.button("🔍", key=f"zoom_{record.get('id', 0)}_{global_idx}", help=f"Görsel {global_idx+1} Büyüt"):
+                                    show_image_modal(img_p, f"{record.get('name')} - Görsel {global_idx+1}")
+                        else:
+                            st.write("-")
+            else:
+                st.write("-")
+        with col4:
+            if st.button("✏️ Düzenle", key=f"edit_{record.get('id', 0)}"):
+                st.session_state.edit_id = record.get('id')
+                st.rerun()
+        with col5:
+            if st.button("🗑️ Sil", key=f"del_{record.get('id', 0)}"):
+                imgs_to_delete = record.get('image_paths', [])
+                for img_to_delete in imgs_to_delete:
+                    if img_to_delete and os.path.exists(img_to_delete) and os.path.isfile(img_to_delete):
+                        try:
+                            os.remove(img_to_delete)
+                        except:
+                            pass
+                
+                if delete_record_db(record.get('id')):
+                    if st.session_state.edit_id == record.get('id'):
+                        st.session_state.edit_id = None
+                    st.success("Kayıt veritabanından silindi.")
+                    st.rerun()
+        st.markdown("---")
+else:
+    st.info("Aramanıza uygun veya henüz eklenmiş bir kayıt bulunmuyor.")
+
+# --- İSTATİSTİKLER VE GRAFİKLER ---
+if records:
+    st.markdown("---")
+    st.subheader("📊 İstatistikler ve Grafikler")
+    
+    df = pd.DataFrame(records)
+    if "date" in df.columns and not df.empty:
+        date_counts = df["date"].value_counts().reset_index()
+        date_counts.columns = ["Tarih", "Kayıt Sayısı"]
+        date_counts = date_counts.sort_values("Tarih")
+        
+        fig = px.bar(date_counts, x="Tarih", y="Kayıt Sayısı", title="Günlük Kayıt Dağılımı", text="Kayıt Sayısı")
+        st.plotly_chart(fig, use_container_width=True)
