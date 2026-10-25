@@ -37,12 +37,15 @@ def load_records():
         for r in records:
             if "image_path" in r and "image_paths" not in r:
                 r["image_paths"] = [r["image_path"]] if r["image_path"] else []
-            # Eski lokal yolları filtrele, sadece http ile başlayan bulut URL'lerini tut
+            
+            # KESİN ÇÖZÜM FİLTRESİ: Sadece http/https ile başlayan geçerli bulut URL'lerini tut, eskileri temizle!
             if "image_paths" in r and isinstance(r["image_paths"], list):
                 r["image_paths"] = [p for p in r["image_paths"] if p and str(p).startswith("http")]
+            else:
+                r["image_paths"] = []
         return records
     except Exception as e:
-        st.error(f"Veri yüklenirken hata oluştu: {e}")
+        st.error(f"Veriler yüklenirken hata oluştu: {e}")
         return []
 
 def save_record_db(new_item):
