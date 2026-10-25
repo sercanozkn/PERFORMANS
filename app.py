@@ -8,7 +8,7 @@ import plotly.express as px
 from supabase import create_client, Client
 
 # --- SAYFA AYARI ---
-st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide", page_icon="📋")
+st.set_page_config(page_page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide", page_icon="📋")
 
 # --- SUPABASE BAĞLANTISI ---
 @st.cache_resource
@@ -141,11 +141,11 @@ with st.sidebar:
                 st.error("Hatalı şifre!")
 
 # --- ANA EKRAN ---
-st.title("📋 Notes - Hata dan Kayıt Takip Paneli")
+st.title("📋 Notes - Hata ve Kayıt Takip Paneli")
 st.markdown("---")
 
 # Modal / Görsel Büyütme Fonksiyonu
-@st.dialog("🔍 Görsel Önizleme")
+@st.dialog("🔍 Görsel Önizleme", width="large")
 def show_image_modal(img_path, caption):
     if os.path.exists(img_path) and os.path.isfile(img_path):
         st.image(img_path, caption=caption, use_column_width=True)
