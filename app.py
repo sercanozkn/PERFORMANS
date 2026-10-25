@@ -141,9 +141,35 @@ with st.sidebar:
                 st.error("Hatalı şifre!")
 
 # --- ANA EKRAN ---
-st.title("📋 Notes - Hata ve Kayıt Takip Paneli")
+st.title("📋 Notes - Hata dan Kayıt Takip Paneli")
 st.markdown("---")
 
 # Modal / Görsel Büyütme Fonksiyonu
-@st.dialog("🔍 Görsel Önizleme", width="large")
-def show_image
+@st.dialog("🔍 Görsel Önizleme")
+def show_image_modal(img_path, caption):
+    if os.path.exists(img_path) and os.path.isfile(img_path):
+        st.image(img_path, caption=caption, use_column_width=True)
+    else:
+        st.error("Görsel dosyası bulunamadı veya silinmiş.")
+
+# --- YENİ KAYIT / DÜZENLEME FORMU ---
+edit_record = None
+if st.session_state.edit_id is not None:
+    all_recs = load_records()
+    for r in all_recs:
+        if r.get("id") == st.session_state.edit_id:
+            edit_record = r
+            break
+
+with st.expander("➕ Yeni Kayıt / Hata Ekle" if not edit_record else "✏️ Kaydı Düzenle", expanded=True if edit_record else False):
+    with st.form("record_form", clear_on_submit=False if edit_record else True):
+        default_name = edit_record.get("name", "") if edit_record else ""
+        default_date = datetime.strptime(edit_record.get("date"), "%d/%m/%Y").date() if edit_record and edit_record.get("date") else datetime.today()
+        default_note = edit_record.get("note", "") if edit_record else ""
+        default_images = edit_record.get("image_paths", []) if edit_record else []
+
+        f_name = st.text_input("Text (İsim):", value=default_name)
+        f_date = st.date_input("Date (Tarih):", value=default_date)
+        f_note = st.text_area("Not / Açıklama:", value=default_note)
+        
+        f_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "png", "jpeg"], accept_multiple_files=
