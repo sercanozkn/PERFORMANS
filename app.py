@@ -5,37 +5,81 @@ from datetime import datetime
 import uuid
 import streamlit as st
 import plotly.express as px
+from supabase import create_client, Client
 
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide", page_icon="📝")
 
-# --- LOKAL VERİTABANI DOSYASI VE KLASÖRLER ---
-DB_FILE = "notes_database.json"
+# --- SUPABASE BAĞLANTISI ---
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets.get("SUPABASE_URL", "")
+    key = st.secrets.get("SUPABASE_KEY", "")
+    if not url or not key:
+        st.error("Supabase URL veya API Anahtarı Secrets alanında bulunamadı!")
+        st.stop()
+    return create_client(url, key)
+
+supabase = init_supabase()
+
 CONFIG_FILE = "notes_config.json"
 UPLOAD_DIR = "uploaded_images"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# --- YARDIMCI FONKSİYONLAR ---
+# --- SUPABASE VERİTABANI FONKSİYONLARI ---
 def load_records():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                records = json.load(f)
-                for r in records:
-                    if "image_path" in r and "image_paths" not in r:
-                        r["image_paths"] = [r["image_path"]] if r["image_path"] else []
-                return records
-        except Exception as e:
-            st.error(f"Veri yüklenirken hata oluştu: {e}")
-            return []
-    return []
+    try:
+        response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
+        records = response.data if response.data else []
+        for r in records:
+            if "image_path" in r and "image_paths" not in r:
+                r["image_paths"] = [r["image_path"]] if r["image_path"] else []
+        return records
+    except Exception as e:
+        st.error(f"Veri yüklenirken hata oluştu: {e}")
+        return []
 
-def save_records(records):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(records, f, ensure_ascii=False, indent=4)
+def add_record(name, date_str, note, image_paths):
+    try:
+        new_item = {
+            "name": name,
+            "date": date_str,
+            "note": note,
+            "image_paths": image_paths,
+            "has_image": bool(image_paths)
+        }
+        supabase.table("notes_records").insert(new_item).execute()
+        return True
+    except Exception as e:
+        st.error(f"Kayıt eklenirken hata: {e}")
+        return False
 
+def update_record(record_id, name, date_str, note, image_paths):
+    try:
+        update_data = {
+            "name": name,
+            "date": date_str,
+            "note": note,
+            "image_paths": image_paths,
+            "has_image": bool(image_paths)
+        }
+        supabase.table("notes_records").update(update_data).eq("id", record_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"Kayıt güncellenirken hata: {e}")
+        return False
+
+def delete_record_db(record_id):
+    try:
+        supabase.table("notes_records").delete().eq("id", record_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"Kayıt silinirken hata: {e}")
+        return False
+
+# --- CONFIG İŞLEMLERİ ---
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -50,7 +94,6 @@ def save_config(config):
         json.dump(config, f, ensure_ascii=False, indent=4)
 
 def save_images(uploaded_files):
-    """Birden fazla görseli çakışmaları önleyecek şekilde benzersiz isimlerle kaydeder."""
     image_paths = []
     if uploaded_files:
         for uploaded_file in uploaded_files:
@@ -102,7 +145,7 @@ def show_image_modal(img_path, title):
     if st.button("Kapat", use_container_width=True):
         st.rerun()
 
-# --- GİRİŞ / ŞİFRE DEĞİŞTİRME SEKMESİ (SIDEBAR) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.title("⚙️ Yönetim Paneli")
     st.success("🟢 Aktif Oturum (Admin)")
@@ -177,21 +220,15 @@ if editing_record:
     col_up1, col_up2 = st.columns(2)
     with col_up1:
         if st.button("💾 Değişiklikleri Kaydet", type="primary", use_container_width=True):
-            for r in records:
-                if r.get("id") == st.session_state.edit_id:
-                    r["name"] = e_name
-                    r["date"] = e_date.strftime("%d/%m/%Y")
-                    r["note"] = e_note
-                    
-                    if e_uploaded_files:
-                        new_img_paths = save_images(e_uploaded_files)
-                        r["image_paths"] = r.get("image_paths", []) + new_img_paths
-                        r["has_image"] = True
-                        
-            save_records(records)
-            st.session_state.edit_id = None
-            st.success("Kayıt başarıyla güncellendi!")
-            st.rerun()
+            updated_imgs = list(current_images)
+            if e_uploaded_files:
+                new_img_paths = save_images(e_uploaded_files)
+                updated_imgs.extend(new_img_paths)
+                
+            if update_record(st.session_state.edit_id, e_name, e_date.strftime("%d/%m/%Y"), e_note, updated_imgs):
+                st.session_state.edit_id = None
+                st.success("Kayıt başarıyla güncellendi!")
+                st.rerun()
             
     with col_up2:
         if st.button("❌ İptal", use_container_width=True):
@@ -210,25 +247,13 @@ else:
             if submitted:
                 if name and note:
                     image_paths = save_images(uploaded_files)
-                    
-                    new_id = int(datetime.now().timestamp() * 1000)
-                    new_item = {
-                        "id": new_id,
-                        "name": name,
-                        "date": date.strftime("%d/%m/%Y"),
-                        "note": note,
-                        "image_paths": image_paths,
-                        "has_image": bool(image_paths)
-                    }
-                    
-                    records.insert(0, new_item)
-                    save_records(records)
-                    st.success("Kayıt başarıyla eklendi!")
-                    st.rerun()
+                    if add_record(name, date.strftime("%d/%m/%Y"), note, image_paths):
+                        st.success("Kayıt başarıyla Supabase veritabanına eklendi!")
+                        st.rerun()
                 else:
                     st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-# --- PLOTLY İLE MODERN İSTATİSTİK / GRAFİK BÖLÜMÜ ---
+# --- İSTATİSTİKLER VE GRAFİKLER ---
 st.markdown("---")
 st.subheader("📊 İstatistikler ve Grafikler")
 
@@ -302,7 +327,6 @@ col_header, col_export = st.columns([4, 2])
 with col_header:
     st.subheader("📋 All notes (Kayıt ve Hata Tablosu)")
 
-# --- EXCEL / CSV DIŞA AKTARMA ---
 if records:
     df_download = pd.DataFrame(records)[["name", "date", "note"]]
     df_download.columns = ["İsim", "Tarih", "Not / Açıklama"]
@@ -316,7 +340,6 @@ if records:
             use_container_width=True
         )
 
-# --- ARAMA VE FİLTRELEME ---
 search_query = st.text_input("🔍 Kayıtlarda Arama Yap (İsim veya Not):", "").strip().lower()
 
 filtered_records = records
@@ -326,7 +349,6 @@ if search_query:
         if search_query in r.get("name", "").lower() or search_query in r.get("note", "").lower()
     ]
 
-# --- SAYFALAMASYON (PAGINATION) / PERFORMANS ---
 if filtered_records:
     col_p1, col_p2 = st.columns([2, 4])
     with col_p1:
@@ -366,7 +388,6 @@ if filtered_records:
         with col3:
             img_paths = record.get('image_paths', [])
             if img_paths:
-                # Minyatürleri en fazla 3'lü satırlar halinde yan yana dizayn ediyoruz
                 for i in range(0, len(img_paths), 3):
                     row_imgs = img_paths[i:i+3]
                     thumb_cols = st.columns(len(row_imgs))
@@ -391,11 +412,11 @@ if filtered_records:
                         try: os.remove(img_to_delete)
                         except: pass
 
-                records = [r for r in records if r.get('id') != record.get('id')]
-                save_records(records)
-                if st.session_state.edit_id == record.get('id'):
-                    st.session_state.edit_id = None
-                st.rerun()
+                if delete_record_db(record.get('id')):
+                    if st.session_state.edit_id == record.get('id'):
+                        st.session_state.edit_id = None
+                    st.success("Kayıt veritabanından silindi.")
+                    st.rerun()
         st.markdown("---")
 else:
     st.info("Aramanıza uygun veya henüz eklenmiş bir kayıt bulunmuyor.")
