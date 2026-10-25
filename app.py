@@ -5,272 +5,355 @@ from datetime import datetime
 import uuid
 import streamlit as st
 import plotly.express as px
-from supabase import create_client, Client
 
 # --- SAYFA AYARI ---
-st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide", page_icon="📋")
+st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide", page_icon="📝")
 
-# --- SUPABASE BAĞLANTISI ---
-@st.cache_resource
-def init_supabase() -> Client:
-    url = "".join(str(st.secrets.get("SUPABASE_URL", "")).split()).strip('"')
-    key = "".join(str(st.secrets.get("SUPABASE_KEY", "")).split()).strip('"').strip("'")
-    
-    if not url.startswith("http"):
-        url = "https://" + url
-        
-    if not url or not key:
-        st.error("Supabase URL veya API Anahtarı Secrets alanında bulunamadı!")
-        st.stop()
-    return create_client(url, key)
-
-supabase = init_supabase()
-
+# --- LOKAL VERİTABANI DOSYASI VE KLASÖRLER ---
+DB_FILE = "notes_database.json"
 CONFIG_FILE = "notes_config.json"
 UPLOAD_DIR = "uploaded_images"
 
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# --- SUPABASE VERİTABANI FONKSİYONLARI ---
+# --- YARDIMCI FONKSİYONLAR ---
 def load_records():
-    try:
-        response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
-        records = response.data if response.data else []
-        for r in records:
-            if "image_path" in r and "image_paths" not in r:
-                r["image_paths"] = [r["image_path"]] if r["image_path"] else []
-        return records
-    except Exception as e:
-        st.error(f"Veriler yüklenirken hata oluştu: {e}")
-        return []
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                records = json.load(f)
+                for r in records:
+                    if "image_path" in r and "image_paths" not in r:
+                        r["image_paths"] = [r["image_path"]] if r["image_path"] else []
+                return records
+        except Exception as e:
+            st.error(f"Veri yüklenirken hata oluştu: {e}")
+            return []
+    return []
 
-def save_record_db(name, date_str, note, image_paths):
-    try:
-        data = {
-            "name": name,
-            "date": date_str,
-            "note": note,
-            "image_paths": image_paths
-        }
-        supabase.table("notes_records").insert(data).execute()
-        return True
-    except Exception as e:
-        st.error(f"Kayıt eklenirken hata: {e}")
-        return False
+def save_records(records):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=4)
 
-def update_record_db(record_id, name, date_str, note, image_paths):
-    try:
-        data = {
-            "name": name,
-            "date": date_str,
-            "note": note,
-            "image_paths": image_paths
-        }
-        supabase.table("notes_records").update(data).eq("id", record_id).execute()
-        return True
-    except Exception as e:
-        st.error(f"Kayıt güncellenirken hata: {e}")
-        return False
-
-def delete_record_db(record_id):
-    try:
-        supabase.table("notes_records").delete().eq("id", record_id).execute()
-        return True
-    except Exception as e:
-        st.error(f"Kayıt silinirken hata: {e}")
-        return False
-
-# --- KİMLİK DOĞRULAMA (ŞİFRE) ---
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except:
-            pass
-    return {"password": "admin"}
+        except Exception:
+            return {"admin_password": "1234"}
+    return {"admin_password": "1234"}
 
 def save_config(config):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
 
-config = load_config()
+def save_images(uploaded_files):
+    """Birden fazla görseli çakışmaları önleyecek şekilde benzersiz isimlerle kaydeder."""
+    image_paths = []
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            file_ext = os.path.splitext(uploaded_file.name)[1]
+            unique_filename = f"{uuid.uuid4().hex}_{int(datetime.now().timestamp())}{file_ext}"
+            image_path = os.path.join(UPLOAD_DIR, unique_filename)
+            
+            with open(image_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            image_paths.append(image_path)
+    return image_paths
 
+# --- OTURUM (SESSION) YÖNETİMİ ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-
 if "edit_id" not in st.session_state:
     st.session_state.edit_id = None
 
-# --- YÖNETİM PANELİ (KENAR ÇUBUĞU) ---
+# --- GİRİŞ KONTROLÜ ---
+def check_password():
+    config = load_config()
+    admin_pass = config.get("admin_password", "1234")
+    
+    if not st.session_state.authenticated:
+        st.title("🔒 Giriş Yap")
+        with st.form("login_form"):
+            username = st.text_input("Kullanıcı Adı:", value="admin")
+            password = st.text_input("Şifre:", type="password")
+            if st.form_submit_button("Giriş Yap", use_container_width=True):
+                if username == "admin" and password == admin_pass:
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Hatalı kullanıcı adı veya şifre!")
+        return False
+    return True
+
+if not check_password():
+    st.stop()
+
+# --- RESİM BÜYÜTME (MODAL / POP-UP) ---
+@st.dialog("🖼️ Görsel Tam Ekran Önizleme", width="large")
+def show_image_modal(img_path, title):
+    st.subheader(title)
+    if os.path.exists(img_path):
+        st.image(img_path, use_container_width=True)
+    else:
+        st.error("Görsel bulunamadı.")
+    if st.button("Kapat", use_container_width=True):
+        st.rerun()
+
+# --- GİRİŞ / ŞİFRE DEĞİŞTİRME SEKMESİ (SIDEBAR) ---
 with st.sidebar:
-    st.header("⚙️ Yönetim Paneli")
-    if st.session_state.authenticated:
-        st.success("🟢 Aktif Oturum (Admin)")
-        st.markdown("---")
-        st.subheader("🔑 Şifre Değiştir")
-        current_pw = st.text_input("Mevcut Şifre", type="password", key="curr_pw")
-        new_pw = st.text_input("Yeni Şifre", type="password", key="new_pw")
-        new_pw_conf = st.text_input("Yeni Şifre (Tekrar)", type="password", key="new_pw_conf")
+    st.title("⚙️ Yönetim Paneli")
+    st.success("🟢 Aktif Oturum (Admin)")
+    st.markdown("---")
+    
+    st.subheader("🔑 Şifre Değiştir")
+    with st.form("change_pass_form"):
+        old_pass = st.text_input("Mevcut Şifre:", type="password")
+        new_pass = st.text_input("Yeni Şifre:", type="password")
+        confirm_pass = st.text_input("Yeni Şifre (Tekrar):", type="password")
         
-        if st.button("Şifreyi Güncelle"):
-            if current_pw == config.get("password", "admin"):
-                if new_pw and new_pw == new_pw_conf:
-                    config["password"] = new_pw
+        if st.form_submit_button("Şifreyi Güncelle"):
+            config = load_config()
+            if old_pass == config.get("admin_password", "1234"):
+                if new_pass and new_pass == confirm_pass:
+                    config["admin_password"] = new_pass
                     save_config(config)
-                    st.success("Şifreniz başarıyla değiştirildi!")
+                    st.success("Şifre başarıyla değiştirildi!")
                 else:
-                    st.error("Yeni şifreler eşleşmiyor veya boş.")
+                    st.error("Yeni şifreler uyuşmuyor veya boş bırakılamaz.")
             else:
-                st.error("Mevcut şifre yanlış!")
+                st.error("Mevcut şifre hatalı!")
                 
-        st.markdown("---")
-        if st.button("🚪 Çıkış Yap"):
-            st.session_state.authenticated = False
-            st.rerun()
-    else:
-        st.warning("🔒 Oturum Kapalı")
-        login_pw = st.text_input("Yönetici Şifresi", type="password", key="login_pw_input")
-        if st.button("Giriş Yap"):
-            if login_pw == config.get("password", "admin"):
-                st.session_state.authenticated = True
-                st.success("Giriş başarılı!")
-                st.rerun()
-            else:
-                st.error("Hatalı şifre!")
+    st.markdown("---")
+    if st.button("🚪 Çıkış Yap", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.edit_id = None
+        st.rerun()
 
-# --- ANA EKRAN ---
-st.title("📋 Notes - Hata ve Kayıt Takip Paneli")
+# --- ANA UYGULAMA ---
+st.title("📄 Notes - Hata ve Kayıt Takip Paneli")
 st.markdown("---")
 
-# Modal / Görsel Büyütme Fonksiyonu
-@st.dialog("🔍 Görsel Önizleme")
-def show_image_modal(img_path, caption):
-    if os.path.exists(img_path) and os.path.isfile(img_path):
-        st.image(img_path, caption=caption, use_column_width=True)
-    else:
-        st.error("Görsel dosyası bulunamadı veya silinmiş.")
-
-# --- YENİ KAYIT / DÜZENLEME FORMU ---
-edit_record = None
-if st.session_state.edit_id is not None:
-    all_recs = load_records()
-    for r in all_recs:
-        if r.get("id") == st.session_state.edit_id:
-            edit_record = r
-            break
-
-with st.expander("➕ Yeni Kayıt / Hata Ekle" if not edit_record else "✏️ Kaydı Düzenle", expanded=True if edit_record else False):
-    with st.form("record_form", clear_on_submit=False if edit_record else True):
-        default_name = edit_record.get("name", "") if edit_record else ""
-        default_date = datetime.strptime(edit_record.get("date"), "%d/%m/%Y").date() if edit_record and edit_record.get("date") else datetime.today()
-        default_note = edit_record.get("note", "") if edit_record else ""
-        default_images = edit_record.get("image_paths", []) if edit_record else []
-
-        f_name = st.text_input("Text (İsim):", value=default_name)
-        f_date = st.date_input("Date (Tarih):", value=default_date)
-        f_note = st.text_area("Not / Açıklama:", value=default_note)
-        
-        f_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
-        
-        if edit_record and default_images:
-            st.markdown("**Mevcut Yüklü Görseller:**")
-            cols_prev = st.columns(min(len(default_images), 4))
-            keep_images = []
-            for idx, img_p in enumerate(default_images):
-                if os.path.exists(img_p) and os.path.isfile(img_p):
-                    with cols_prev[idx % 4]:
-                        st.image(img_p, width=70)
-                        if st.checkbox(f"Koru #{idx+1}", value=True, key=f"keep_{edit_record.get('id')}_{idx}"):
-                            keep_images.append(img_p)
-                else:
-                    if os.path.exists(img_p):
-                        try:
-                            os.remove(img_p)
-                        except:
-                            pass
-
-        submit_label = "Güncelle" if edit_record else "Tabloya Ekle"
-        submitted = st.form_submit_button(submit_label)
-        
-        if submitted:
-            if not f_name.strip():
-                st.error("Lütfen 'Text (İsim)' alanını boş bırakmayın.")
-            else:
-                date_str = f_date.strftime("%d/%m/%Y")
-                final_image_paths = keep_images if edit_record else []
-                
-                if f_files:
-                    for uploaded_file in f_files:
-                        file_ext = os.path.splitext(uploaded_file.name)[1]
-                        unique_filename = f"{uuid.uuid4()}{file_ext}"
-                        file_path = os.path.join(UPLOAD_DIR, unique_filename)
-                        with open(file_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        final_image_paths.append(file_path)
-                
-                if edit_record:
-                    if update_record_db(edit_record.get("id"), f_name, date_str, f_note, final_image_paths):
-                        st.success("Kayıt başarıyla güncellendi!")
-                        st.session_state.edit_id = None
-                        st.rerun()
-                else:
-                    if save_record_db(f_name, date_str, f_note, final_image_paths):
-                        st.success("Kayıt başarıyla eklendi!")
-                        st.rerun()
-
-        if edit_record:
-            if st.form_submit_button("İptal Et"):
-                st.session_state.edit_id = None
-                st.rerun()
-
-st.markdown("---")
-
-# --- ARAMA VE FİLTRELEME ---
 records = load_records()
 
-col_s1, col_s2 = st.columns([2, 1])
-with col_s1:
-    search_query = st.text_input("🔍 Kayıtlarda Ara (İsim veya Not):", "")
-with col_s2:
-    sort_order = st.selectbox("Sıralama:", ["Yeniden Eskiye", "Eskiden Yeniye"])
+# --- DÜZENLEME MODU VEYA YENİ KAYIT ---
+editing_record = None
+if st.session_state.edit_id is not None:
+    for r in records:
+        if r.get("id") == st.session_state.edit_id:
+            editing_record = r
+            break
 
-filtered_records = []
-for r in records:
-    if search_query.lower() in r.get("name", "").lower() or search_query.lower() in r.get("note", "").lower():
-        filtered_records.append(r)
+if editing_record:
+    st.subheader("✏️ Kaydı Düzenle")
+    
+    e_name = st.text_input("Text (İsim):", value=editing_record.get("name", ""), key="edit_name")
+    
+    date_str = editing_record.get("date", datetime.now().strftime("%d/%m/%Y"))
+    try:
+        default_date = datetime.strptime(date_str, "%d/%m/%Y").date()
+    except ValueError:
+        try:
+            default_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            default_date = datetime.now().date()
+            
+    e_date = st.date_input("Date (Tarih):", value=default_date, format="DD/MM/YYYY", key="edit_date")
+    e_note = st.text_area("Not / Açıklama:", value=editing_record.get("note", ""), key="edit_note")
+    
+    current_images = editing_record.get("image_paths", [])
+    if current_images:
+        st.markdown("**Mevcut Görseller:**")
+        img_cols = st.columns(len(current_images) if len(current_images) <= 4 else 4)
+        for idx, img_p in enumerate(current_images):
+            if os.path.exists(img_p):
+                with img_cols[idx % 4]:
+                    st.image(img_p, width=100)
+    
+    e_uploaded_files = st.file_uploader("Yeni Görseller Yükle (İsteğe Bağlı - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="edit_file")
 
-if sort_order == "Eskiden Yeniye":
-    filtered_records = sorted(filtered_records, key=lambda x: x.get("id", 0))
+    col_up1, col_up2 = st.columns(2)
+    with col_up1:
+        if st.button("💾 Değişiklikleri Kaydet", type="primary", use_container_width=True):
+            for r in records:
+                if r.get("id") == st.session_state.edit_id:
+                    r["name"] = e_name
+                    r["date"] = e_date.strftime("%d/%m/%Y")
+                    r["note"] = e_note
+                    
+                    if e_uploaded_files:
+                        new_img_paths = save_images(e_uploaded_files)
+                        r["image_paths"] = r.get("image_paths", []) + new_img_paths
+                        r["has_image"] = True
+                        
+            save_records(records)
+            st.session_state.edit_id = None
+            st.success("Kayıt başarıyla güncellendi!")
+            st.rerun()
+            
+    with col_up2:
+        if st.button("❌ İptal", use_container_width=True):
+            st.session_state.edit_id = None
+            st.rerun()
 
-# --- SAYFALAMA ---
-items_per_page = st.selectbox("Sayfa Başına Kayıt:", [5, 10, 20, 50], index=0)
-total_records = len(filtered_records)
-total_pages = (total_records // items_per_page) + (1 if total_records % items_per_page > 0 else 0)
-total_pages = max(total_pages, 1)
+else:
+    with st.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
+        with st.form("new_record_form", clear_on_submit=True):
+            name = st.text_input("Text (İsim):")
+            date = st.date_input("Date (Tarih):", format="DD/MM/YYYY")
+            note = st.text_area("Not / Açıklama:")
+            uploaded_files = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+            
+            submitted = st.form_submit_button("Tabloya Ekle", type="primary")
+            if submitted:
+                if name and note:
+                    image_paths = save_images(uploaded_files)
+                    
+                    new_id = int(datetime.now().timestamp() * 1000)
+                    new_item = {
+                        "id": new_id,
+                        "name": name,
+                        "date": date.strftime("%d/%m/%Y"),
+                        "note": note,
+                        "image_paths": image_paths,
+                        "has_image": bool(image_paths)
+                    }
+                    
+                    records.insert(0, new_item)
+                    save_records(records)
+                    st.success("Kayıt başarıyla eklendi!")
+                    st.rerun()
+                else:
+                    st.warning("Lütfen İsim ve Not alanlarını doldurun.")
 
-page_num = st.number_input("Sayfa", min_value=1, max_value=total_pages, step=1, value=1)
-start_idx = (page_num - 1) * items_per_page
-end_idx = start_idx + items_per_page
-paginated_records = filtered_records[start_idx:end_idx]
-
-st.markdown(f"Toplam **{total_records}** kayıttan **{start_idx+1} - {min(end_idx, total_records)}** arası gösteriliyor. (Sayfa {page_num}/{total_pages})")
+# --- PLOTLY İLE MODERN İSTATİSTİK / GRAFİK BÖLÜMÜ ---
 st.markdown("---")
+st.subheader("📊 İstatistikler ve Grafikler")
 
-# --- TABLO BAŞLIKLARI ---
-if paginated_records:
+if records:
+    df_chart = pd.DataFrame(records)
+    
+    df_chart["Görsel Durumu"] = df_chart["image_paths"].apply(
+        lambda x: "Resimli Kayıt" if isinstance(x, list) and len(x) > 0 else "Resimsiz Kayıt"
+    )
+    
+    col_g1, col_g2 = st.columns([1, 1])
+    
+    with col_g1:
+        st.markdown("##### 👤 İsimlere Göre Toplam Kayıt İstatistikleri")
+        if "name" in df_chart.columns and not df_chart.empty:
+            name_counts = df_chart["name"].value_counts().reset_index()
+            name_counts.columns = ["İsim", "Kayıt Sayısı"]
+            
+            fig1 = px.bar(
+                name_counts,
+                x="İsim",
+                y="Kayıt Sayısı",
+                color="Kayıt Sayısı",
+                color_continuous_scale="Plasma",
+                text="Kayıt Sayısı",
+                template="plotly_dark"
+            )
+            fig1.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis_title="İsimler",
+                yaxis_title="Kayıt Sayısı",
+                coloraxis_showscale=False
+            )
+            fig1.update_traces(textposition='outside')
+            st.plotly_chart(fig1, use_container_width=True)
+
+    with col_g2:
+        st.markdown("##### 🖼️ İsimlere Göre Resimli / Resimsiz Detaylı Dağılım")
+        if "name" in df_chart.columns and not df_chart.empty:
+            person_img_counts = df_chart.groupby(["name", "Görsel Durumu"]).size().reset_index(name="Sayı")
+            
+            fig2 = px.bar(
+                person_img_counts,
+                x="name",
+                y="Sayı",
+                color="Görsel Durumu",
+                barmode="group",
+                color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"},
+                text="Sayı",
+                template="plotly_dark"
+            )
+            fig2.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="white"),
+                xaxis_title="İsimler",
+                yaxis_title="Kayıt Sayısı",
+                legend_title="Durum"
+            )
+            fig2.update_traces(textposition='outside')
+            st.plotly_chart(fig2, use_container_width=True)
+
+else:
+    st.info("Henüz istatistik oluşturulacak kayıt yok.")
+
+# --- TABLO VE YÖNETİM ---
+st.markdown("---")
+col_header, col_export = st.columns([4, 2])
+with col_header:
+    st.subheader("📋 All notes (Kayıt ve Hata Tablosu)")
+
+# --- EXCEL / CSV DIŞA AKTARMA ---
+if records:
+    df_download = pd.DataFrame(records)[["name", "date", "note"]]
+    df_download.columns = ["İsim", "Tarih", "Not / Açıklama"]
+    csv_data = df_download.to_csv(index=False, encoding='utf-8-sig')
+    with col_export:
+        st.download_button(
+            label="📥 Excel/CSV Olarak İndir",
+            data=csv_data,
+            file_name=f"notlar_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+# --- ARAMA VE FİLTRELEME ---
+search_query = st.text_input("🔍 Kayıtlarda Arama Yap (İsim veya Not):", "").strip().lower()
+
+filtered_records = records
+if search_query:
+    filtered_records = [
+        r for r in records
+        if search_query in r.get("name", "").lower() or search_query in r.get("note", "").lower()
+    ]
+
+# --- SAYFALAMASYON (PAGINATION) / PERFORMANS ---
+if filtered_records:
+    col_p1, col_p2 = st.columns([2, 4])
+    with col_p1:
+        items_per_page = st.selectbox("Sayfa Başına Kayıt:", [5, 10, 20, 50], index=0)
+    
+    total_items = len(filtered_records)
+    total_pages = (total_items - 1) // items_per_page + 1 if total_items > 0 else 1
+    
+    with col_p2:
+        if total_pages > 1:
+            page_number = st.number_input("Sayfa Seç:", min_value=1, max_value=total_pages, value=1, step=1)
+        else:
+            page_number = 1
+            
+    start_idx = (page_number - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    paginated_records = filtered_records[start_idx:end_idx]
+
+    st.markdown(f"*Toplam **{total_items}** kayıttan **{start_idx+1} - {min(end_idx, total_items)}** arası gösteriliyor. (Sayfa {page_number}/{total_pages})*")
+    st.markdown("---")
+
     h1, h2, h3, h4, h5 = st.columns([2, 3, 2, 1, 1])
-    with h1:
-        st.markdown("**İsim & Not**")
-    with h2:
-        st.markdown("**Tarih**")
-    with h3:
-        st.markdown("**Görsel**")
-    with h4:
-        st.markdown("**İşlem**")
-    with h5:
-        st.markdown("**İşlem**")
+    h1.markdown("**İsim & Not**")
+    h2.markdown("**Tarih**")
+    h3.markdown("**Görsel**")
+    h4.markdown("**İşlem**")
+    h5.markdown("**İşlem**")
     st.markdown("---")
 
     for record in paginated_records:
@@ -283,18 +366,17 @@ if paginated_records:
         with col3:
             img_paths = record.get('image_paths', [])
             if img_paths:
+                # Minyatürleri en fazla 3'lü satırlar halinde yan yana dizayn ediyoruz
                 for i in range(0, len(img_paths), 3):
                     row_imgs = img_paths[i:i+3]
                     thumb_cols = st.columns(len(row_imgs))
                     for sub_idx, img_p in enumerate(row_imgs):
                         global_idx = i + sub_idx
-                        if os.path.exists(img_p) and os.path.isfile(img_p):
+                        if os.path.exists(img_p):
                             with thumb_cols[sub_idx]:
                                 st.image(img_p, width=45)
                                 if st.button("🔍", key=f"zoom_{record.get('id', 0)}_{global_idx}", help=f"Görsel {global_idx+1} Büyüt"):
                                     show_image_modal(img_p, f"{record.get('name')} - Görsel {global_idx+1}")
-                        else:
-                            st.write("-")
             else:
                 st.write("-")
         with col4:
@@ -305,31 +387,15 @@ if paginated_records:
             if st.button("🗑️ Sil", key=f"del_{record.get('id', 0)}"):
                 imgs_to_delete = record.get('image_paths', [])
                 for img_to_delete in imgs_to_delete:
-                    if img_to_delete and os.path.exists(img_to_delete) and os.path.isfile(img_to_delete):
-                        try:
-                            os.remove(img_to_delete)
-                        except:
-                            pass
-                
-                if delete_record_db(record.get('id')):
-                    if st.session_state.edit_id == record.get('id'):
-                        st.session_state.edit_id = None
-                    st.success("Kayıt veritabanından silindi.")
-                    st.rerun()
+                    if img_to_delete and os.path.exists(img_to_delete):
+                        try: os.remove(img_to_delete)
+                        except: pass
+
+                records = [r for r in records if r.get('id') != record.get('id')]
+                save_records(records)
+                if st.session_state.edit_id == record.get('id'):
+                    st.session_state.edit_id = None
+                st.rerun()
         st.markdown("---")
 else:
     st.info("Aramanıza uygun veya henüz eklenmiş bir kayıt bulunmuyor.")
-
-# --- İSTATİSTİKLER VE GRAFİKLER ---
-if records:
-    st.markdown("---")
-    st.subheader("📊 İstatistikler ve Grafikler")
-    
-    df = pd.DataFrame(records)
-    if "date" in df.columns and not df.empty:
-        date_counts = df["date"].value_counts().reset_index()
-        date_counts.columns = ["Tarih", "Kayıt Sayısı"]
-        date_counts = date_counts.sort_values("Tarih")
-        
-        fig = px.bar(date_counts, x="Tarih", y="Kayıt Sayısı", title="Günlük Kayıt Dağılımı", text="Kayıt Sayısı")
-        st.plotly_chart(fig, use_container_width=True)
