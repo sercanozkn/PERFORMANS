@@ -23,7 +23,6 @@ BUCKET_NAME = "notes-media"
 # --- VERİLERİ YÜKLEME ---
 def load_records():
     try:
-        # Supabase'den verileri çekiyoruz
         response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
         records = response.data if response and response.data else []
         
@@ -87,11 +86,10 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
             uploaded_urls = save_images(new_images)
             max_id = max([r.get("id", 0) for r in records], default=0) if records else 0
             
-            # Supabase tablolarında en sık kullanılan sütun adlarını kapsayacak şekilde gönderiyoruz
+            # Supabase tablosu ile birebir uyumlu, 'text' içermeyen kayıt sözlüğü
             new_record = {
                 "id": max_id + 1,
                 "name": new_name,
-                "text": new_name,
                 "date": new_date,
                 "note": new_note,
                 "image_paths": uploaded_urls
