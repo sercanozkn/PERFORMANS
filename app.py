@@ -62,12 +62,15 @@ def save_images(uploaded_files):
                     file_options={"content-type": uploaded_file.type}
                 )
                 
-                # Public URL alma (Doğru format)
-                res = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
-                if isinstance(res, dict) and "publicUrl" in res:
-                    image_paths.append(res["publicUrl"])
-                elif isinstance(res, str):
-                    image_paths.append(res)
+                # Public URL alma (Garantili yöntem)
+                public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
+                
+                if isinstance(public_url, dict):
+                    url_val = public_url.get("publicUrl") or public_url.get("public_url")
+                    if url_val:
+                        image_paths.append(url_val)
+                elif isinstance(public_url, str):
+                    image_paths.append(public_url)
             except Exception as e:
                 st.error(f"Resim yüklenirken hata oluştu: {e}")
     return image_paths
