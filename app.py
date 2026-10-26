@@ -15,9 +15,9 @@ def init_supabase():
     key = "".join(str(st.secrets.get("SUPABASE_KEY", "")).split())
     if not url.startswith("http"):
         url = "https://" + url
-    return create_client(url, key)
+    return create_client(url, key), url
 
-supabase = init_supabase()
+supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
 # --- VERİLERİ YÜKLEME ---
@@ -37,8 +37,12 @@ def load_records():
             for p in raw_paths:
                 if p:
                     p_str = str(p).strip()
+                    # Eğer tam URL değilse ama dosya adıysa manuel public URL'e çevir
                     if p_str.startswith("http"):
                         paths.append(p_str)
+                    elif len(p_str) > 5 and not p_str.startswith("•"):
+                        clean_base = SUPABASE_URL.rstrip('/')
+                        paths.append(f"{clean_base}/storage/v1/object/public/{BUCKET_NAME}/{p_str}")
             r["image_paths"] = paths
         return records
     except Exception as e:
@@ -55,22 +59,15 @@ def save_images(uploaded_files):
                 unique_filename = f"{uuid.uuid4().hex}_{int(datetime.now().timestamp())}{file_ext}"
                 file_bytes = uploaded_file.getvalue()
                 
-                # Supabase Storage'a yükleme
                 supabase.storage.from_(BUCKET_NAME).upload(
                     path=unique_filename,
                     file=file_bytes,
                     file_options={"content-type": uploaded_file.type}
                 )
                 
-                # Public URL alma
-                public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
-                
-                if isinstance(public_url, dict):
-                    url_val = public_url.get("publicUrl") or public_url.get("public_url")
-                    if url_val:
-                        image_paths.append(url_val)
-                elif isinstance(public_url, str):
-                    image_paths.append(public_url)
+                clean_base_url = SUPABASE_URL.rstrip('/')
+                public_url = f"{clean_base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
+                image_paths.append(public_url)
             except Exception as e:
                 st.error(f"Resim yüklenirken hata oluştu: {e}")
     return image_paths
@@ -91,8 +88,6 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
         submit_btn = st.form_submit_button("Tabloya Ekle")
         if submit_btn:
             uploaded_urls = save_images(new_images)
-            st.write("Oluşan Resim Linkleri:", uploaded_urls) # Debug için linkleri gösteriyoruz
-            
             max_id = max([r.get("id", 0) for r in records], default=0) if records else 0
             
             new_record = {
@@ -147,8 +142,8 @@ if filtered_records:
                 for img_url in valid_imgs:
                     try:
                         st.image(img_url, width=45)
-                    except Exception as e:
-                        st.write(f"Hata: {e}")
+                    except Exception:
+                        pass
             else:
                 st.text("-")
                     
