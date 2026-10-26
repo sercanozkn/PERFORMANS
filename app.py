@@ -172,4 +172,14 @@ if filtered_records:
                 st.text("-")
                     
         with col4:
-            if st.button
+            if st.button("Sil", key=f"del_{r.get('id', 0)}"):
+                try:
+                    supabase.table("notes_records").delete().eq("id", r.get('id')).execute()
+                    st.success("Kayıt silindi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Silinirken hata oluştu: {e}")
+                
+        st.markdown("---")
+else:
+    st.info("Kayıt bulunmuyor.")
