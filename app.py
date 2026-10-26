@@ -7,9 +7,9 @@ import plotly.express as px
 from supabase import create_client, Client
 
 # --- SAYFA AYARI ---
-st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide")
+st.set_page_config(page_title="Notes - Kesintisiz Yonetim Sistemi", layout="wide")
 
-# --- SUPABASE BAĞLANTISI ---
+# --- SUPABASE BAGLANTISI ---
 @st.cache_resource
 def init_supabase():
     url = "".join(str(st.secrets.get("SUPABASE_URL", "")).split())
@@ -21,24 +21,24 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM & KULLANICI YÖNETİMİ ---
+# --- OTURUM & KULLANICI YONETIMI ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    st.title("🔐 Notes - Kullanıcı Girişi")
+    st.title("🔐 Notes - Kullanici Girisi")
     
     try:
         res = supabase.table("notes_users").select("*").execute()
         users_list = res.data if res.data else []
     except Exception as e:
         users_list = []
-        st.error(f"Veritabanı bağlantı hatası: {e}")
+        st.error(f"Veritabani baglanti hatasi: {e}")
 
     with st.form("login_form"):
-        username_input = st.text_input("Kullanıcı Adı:")
-        password_input = st.text_input("Şifre:", type="password")
-        login_btn = st.form_submit_button("Giriş Yap")
+        username_input = st.text_input("Kullanici Adi:")
+        password_input = st.text_input("Sifre:", type="password")
+        login_btn = st.form_submit_button("Giris Yap")
         
         if login_btn:
             login_success = False
@@ -53,13 +53,13 @@ if not st.session_state["logged_in"]:
                 st.session_state["logged_in"] = True
                 st.session_state["user_id"] = matched_user_id
                 st.session_state["username"] = username_input.strip()
-                st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
+                st.success("Giris basarili! Yonlendiriliyorsunuz...")
                 st.rerun()
             else:
-                st.error("Kullanıcı adı veya şifre hatalı!")
+                st.error("Kullanici adi veya sifre hatali!")
     st.stop()
 
-# --- VERİLERİ YÜKLEME ---
+# --- VERILERI YUKLEME ---
 def load_records():
     try:
         response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
@@ -90,10 +90,10 @@ def load_records():
             r["image_paths"] = paths
         return records
     except Exception as e:
-        st.error(f"Veriler yüklenirken hata oluştu: {e}")
+        st.error(f"Veriler yuklenirken hata olustu: {e}")
         return []
 
-# --- RESİM YÜKLEME ---
+# --- RESIM YUKLEME ---
 def save_images(uploaded_files):
     image_paths = []
     if uploaded_files:
@@ -113,23 +113,23 @@ def save_images(uploaded_files):
                 public_url = f"{clean_base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
                 image_paths.append(public_url)
             except Exception as e:
-                st.error(f"Resim yüklenirken hata oluştu: {e}")
+                st.error(f"Resim yuklenirken hata olustu: {e}")
     return image_paths
 
-# --- SOL MENÜ / YÖNETİM PANELİ ---
-st.sidebar.title("🛠️ Yönetim Paneli")
+# --- SOL MENU / YONETIM PANELI ---
+st.sidebar.title("🛠️ Yonetim Paneli")
 
-with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
+with st.sidebar.expander("➕ Yeni Kayit / Hata Ekle", expanded=True):
     with st.form("add_form", clear_on_submit=True):
-        new_name = st.text_input("İsim / Başlık:")
+        new_name = st.text_input("Isim / Baslik:")
         new_date = st.text_input("Tarih:", value=datetime.now().strftime("%d/%m/%Y"))
-        new_note = st.text_area("Not / Açıklama:")
-        new_images = st.file_uploader("Görsel Yükle (Çoklu Seçim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+        new_note = st.text_area("Not / Aciklama:")
+        new_images = st.file_uploader("Gorsel Yukle (Coklu Secim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
         
         submit_btn = st.form_submit_button("Tabloya Ekle")
         if submit_btn:
             if not new_name.strip():
-                st.warning("Lütfen bir isim/başlık girin.")
+                st.warning("Lutfen bir isim/baslik girin.")
             else:
                 uploaded_urls = save_images(new_images)
                 
@@ -141,15 +141,13 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                 }
                 try:
                     supabase.table("notes_records").insert(new_record).execute()
-                    st.success("Kayıт başarıyla eklendi!")
+                    st.success("Kayit basariyla eklendi!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Kayıt eklenirken hata oluştu: {e}")
+                    st.error(f"Kayit eklenirken hata olustu: {e}")
 
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
     with st.form("settings_form"):
-        st.write("**Kullanıcı Bilgileri Değiştir**")
-        current_user_check = st.text_input("Mevcut Kullanıcı Adı:")
-        new_username = st.text_input("Yeni Kullanıcı Adı (İsteğe bağlı):")
-        
-        st.write("**Şifre De
+        st.write("**Kullanici Bilgileri Degistir**")
+        current_user_check = st.text_input("Mevcut Kullanici Adi:")
+        new_username = st.text_input("Yeni Kullanici Adi (Istege bagli):")
