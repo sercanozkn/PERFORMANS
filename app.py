@@ -21,9 +21,15 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM YÖNETİMİ (GİRİŞ KONTROLÜ) ---
+# --- OTURUM & KULLANICI YÖNETİMİ ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+
+# Varsayılan kimlik bilgilerini session state üzerinde tutma (Ayarlar sekmesinden güncellenebilmesi için)
+if "username" not in st.session_state:
+    st.session_state["username"] = st.secrets.get("APP_USERNAME", "admin")
+if "password" not in st.session_state:
+    st.session_state["password"] = st.secrets.get("APP_PASSWORD", "1234")
 
 if not st.session_state["logged_in"]:
     st.title("🔐 Notes - Kullanıcı Girişi")
@@ -33,14 +39,13 @@ if not st.session_state["logged_in"]:
         login_btn = st.form_submit_button("Giriş Yap")
         
         if login_btn:
-            # Varsayılan kullanıcı adı ve şifre kontrolü (istediğiniz gibi değiştirebilirsiniz)
-            if username_input == "admin" and password_input == "1234":
+            if username_input == st.session_state["username"] and password_input == st.session_state["password"]:
                 st.session_state["logged_in"] = True
                 st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
                 st.rerun()
             else:
                 st.error("Kullanıcı adı veya şifre hatalı!")
-    st.stop() # Giriş yapılmadıysa uygulamanın devamını çalıştırma
+    st.stop()  # Giriş yapılmadıysa uygulamanın devamını çalıştırma
 
 # --- VERİLERİ YÜKLEME ---
 def load_records():
@@ -96,7 +101,7 @@ def save_images(uploaded_files):
                 public_url = f"{clean_base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
                 image_paths.append(public_url)
             except Exception as e:
-                st.error(f"Resim yüklenirken hata oluştu: {e}")
+                st.error(f"Resim ({uploaded_file.name}) yüklenirken hata oluştu: {e}")
     return image_paths
 
 # --- SOL MENÜ / YÖNETİM PANELİ ---
@@ -112,29 +117,30 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
         
         submit_btn = st.form_submit_button("Tabloya Ekle")
         if submit_btn:
-            records_check = load_records()
-            uploaded_urls = save_images(new_images)
-            max_id = max([r.get("id", 0) for r in records_check], default=0) if records_check else 0
-            
-            new_record = {
-                "id": max_id + 1,
-                "name": new_name,
-                "date": new_date,
-                "note": new_note,
-                "image_paths": uploaded_urls
-            }
-            try:
-                supabase.table("notes_records").insert(new_record).execute()
-                st.success("Kayıt başarıyla eklendi!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Kayıt eklenirken hata oluştu: {e}")
+            if not new_name.strip():
+                st.warning("Lütfen bir isim/başlık girin.")
+            else:
+                uploaded_urls = save_images(new_images)
+                
+                # 'id' alanını kaldırarak ekleme yapıyoruz; Supabase auto-increment ID üretsin.
+                new_record = {
+                    "name": new_name,
+                    "date": new_date,
+                    "note": new_note,
+                    "image_paths": uploaded_urls
+                }
+                try:
+                    supabase.table("notes_records").insert(new_record).execute()
+                    st.success("Kayıt başarıyla eklendi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Kayıt eklenirken hata oluştu: {e}")
 
-# 2. Ayarlar Sekmesi
+# 2. Ayarlar Sekmesi (Şifre & Kullanıcı Adı Güncelleme)
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
     with st.form("settings_form"):
-        st.write("**Kullanıcı Bilgileri**")
-        current_username = st.text_input("Mevcut Kullanıcı Adı:")
+        st.write("**Kullanıcı Bilgileri Değiştir**")
+        current_user_check = st.text_input("Mevcut Kullanıcı Adı:")
         new_username = st.text_input("Yeni Kullanıcı Adı:")
         
         st.write("**Şifre Değiştir**")
@@ -144,12 +150,20 @@ with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
         
         settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
         if settings_submit:
-            if new_password and new_password != confirm_password:
+            # Doğrulama Kontrolleri
+            if current_user_check != st.session_state["username"] or current_password != st.session_state["password"]:
+                st.error("Mevcut kullanıcı adı veya şifre yanlış!")
+            elif new_password and new_password != confirm_password:
                 st.error("Yeni şifreler birbiriyle uyuşmuyor!")
             else:
+                if new_username.strip():
+                    st.session_state["username"] = new_username.strip()
+                if new_password.strip():
+                    st.session_state["password"] = new_password.strip()
                 st.success("Ayarlar başarıyla güncellendi!")
 
 st.sidebar.markdown("---")
+
 # 3. Çıkış Yap Butonu
 if st.sidebar.button("🚪 Çıkış Yap"):
     st.session_state["logged_in"] = False
@@ -208,20 +222,21 @@ if records:
         st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown("---")
-st.subheader("🗂️ All notes (Kayıt ve Hata Tablosu)")
+st.subheader("🗂️ Tüm Kayıtlar")
 
 # --- ARAMA VE LİSTELEME ---
 search_query = st.text_input("🔍 Kayıtlarda Arama Yap:")
 
 filtered_records = records
 if search_query:
+    query_lower = search_query.lower()
     filtered_records = [
         r for r in records 
-        if search_query.lower() in str(r.get("name", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()
+        if query_lower in str(r.get("name", "") or "").lower() or query_lower in str(r.get("note", "") or "").lower()
     ]
 
 if filtered_records:
-    st.write(f"Toplam {len(filtered_records)} kayıt gösteriliyor.")
+    st.write(f"Toplam **{len(filtered_records)}** kayıt gösteriliyor.")
     
     col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1, 1, 1])
     col_h1.markdown("**İsim & Not**")
@@ -231,12 +246,15 @@ if filtered_records:
     st.markdown("---")
 
     for r in filtered_records:
+        rec_id = r.get("id")
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
         with col1:
             name_val = r.get('name', '') or r.get('text', 'İsimsiz')
             st.markdown(f"**{name_val}**")
-            st.caption(r.get('note', ''))
+            note_val = r.get('note', '')
+            if note_val:
+                st.caption(note_val)
             
         with col2:
             st.write(r.get('date', ''))
@@ -252,9 +270,9 @@ if filtered_records:
                 st.text("-")
                     
         with col4:
-            if st.button("Sil", key=f"del_{r.get('id', 0)}"):
+            if st.button("Sil", key=f"del_{rec_id}"):
                 try:
-                    supabase.table("notes_records").delete().eq("id", r.get('id')).execute()
+                    supabase.table("notes_records").delete().eq("id", rec_id).execute()
                     st.success("Kayıt silindi!")
                     st.rerun()
                 except Exception as e:
@@ -262,4 +280,4 @@ if filtered_records:
                 
         st.markdown("---")
 else:
-    st.info("Kayıt bulunmuyor.")
+    st.info("Gösterilecek kayıt bulunamadı.")
