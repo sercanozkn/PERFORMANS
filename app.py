@@ -113,41 +113,51 @@ st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
 
 records = load_records()
 
-# --- İSTATİSTİKLER VE GRAFİKLER (YAN YANA İKİ GRAFİK) ---
+# --- İSTATİSTİKLER VE GRAFİKLER (İSİMLERE GÖRE) ---
 if records:
     st.subheader("📊 İstatistikler ve Grafikler")
     col_g1, col_g2 = st.columns(2)
     
-    date_counts = {}
-    for r in records:
-        dt = r.get("date", "Bilinmiyor")
-        date_counts[dt] = date_counts.get(dt, 0) + 1
+    name_counts = {}
+    detailed_data = []
     
-    chart_data = [{"Tarih": k, "Kayıt Sayısı": v} for k, v in date_counts.items()]
+    for r in records:
+        name_val = str(r.get("name", "") or r.get("text", "İsimsiz")).strip()
+        if not name_val:
+            name_val = "İsimsiz"
+            
+        name_counts[name_val] = name_counts.get(name_val, 0) + 1
+        
+        imgs = r.get("image_paths", [])
+        valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
+        has_image = "Resimli Kayıt" if valid_imgs else "Resimsiz Kayıt"
+        
+        detailed_data.append({"İsimler": name_val, "Durum": has_image})
+    
+    chart_data1 = [{"İsimler": k, "Kayıt Sayısı": v} for k, v in name_counts.items()]
     
     with col_g1:
         fig1 = px.bar(
-            chart_data, 
-            x="Tarih", 
+            chart_data1, 
+            x="İsimler", 
             y="Kayıt Sayısı", 
-            title="📅 Tarihlere Göre Toplam Kayıt İstatistikleri",
+            title="👤 İsimlere Göre Toplam Kayıt İstatistikleri",
             text="Kayıt Sayısı"
         )
         fig1.update_traces(textposition='outside')
-        fig1.update_layout(xaxis_title="Tarih", yaxis_title="Kayıt Adedi", margin=dict(t=40, b=20, l=20, r=20))
+        fig1.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=20, l=20, r=20))
         st.plotly_chart(fig1, use_container_width=True)
         
     with col_g2:
-        fig2 = px.bar(
-            chart_data, 
-            x="Tarih", 
-            y="Kayıt Sayısı", 
-            title="📈 Tarihlere Göre Aktif / Resimli Detaylı Dağılım",
-            text="Kayıt Sayısı",
-            color="Kayıt Sayısı"
+        fig2 = px.histogram(
+            detailed_data,
+            x="İsimler",
+            color="Durum",
+            barmode="group",
+            title="📈 İsimlere Göre Resimli / Resimsiz Detaylı Dağılım",
+            color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"}
         )
-        fig2.update_traces(textposition='outside')
-        fig2.update_layout(xaxis_title="Tarih", yaxis_title="Kayıt Adedi", margin=dict(t=40, b=25, l=20, r=20))
+        fig2.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=25, l=20, r=20))
         st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown("---")
