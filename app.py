@@ -21,14 +21,12 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM & KULLANICI YONETIMI (GARANTILI SABİT GİRİŞ) ---
+# --- OTURUM & KULLANICI YONETIMI ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
     st.title("🔐 Notes - Kullanici Girisi")
-    
-    st.info("💡 **Giriş Bilgileriniz:** Kullanıcı Adı: **sercan** | Şifre: **134679**")
 
     with st.form("login_form"):
         username_input = st.text_input("Kullanıcı Adı:")
@@ -36,7 +34,6 @@ if not st.session_state["logged_in"]:
         login_btn = st.form_submit_button("Giriş Yap")
         
         if login_btn:
-            # Doğrudan sabit bilgilerimizle kontrol ediyoruz
             if username_input.strip().lower() == "sercan" and password_input.strip() == "134679":
                 st.session_state["logged_in"] = True
                 st.session_state["username"] = "sercan"
@@ -126,8 +123,7 @@ with st.sidebar.expander("➕ Yeni Kayit / Hata Ekle", expanded=True):
                     st.error(f"Hata: {e}")
 
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
-    st.write("Mevcut Kullanıcı: **sercan**")
-    st.write("Şifreniz: **134679**")
+    st.write("Aktif Kullanıcı: **sercan**")
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Cikis Yap"):
@@ -178,5 +174,4 @@ for r in filtered_records:
         
     if c4.button("Sil", key=f"del_{rec_id}"):
         supabase.table("notes_records").delete().eq("id", rec_id).execute()
-        st.rerun()
-    st.markdown("---")
+        st.
