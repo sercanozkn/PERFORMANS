@@ -28,7 +28,6 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     st.title("🔐 Notes - Kullanıcı Girişi")
     
-    # Veritabanından kullanıcıları anlık çekelim
     try:
         res = supabase.table("notes_users").select("*").execute()
         users_list = res.data if res.data else []
@@ -58,7 +57,7 @@ if not st.session_state["logged_in"]:
                 st.rerun()
             else:
                 st.error("Kullanıcı adı veya şifre hatalı!")
-    st.stop()  # Giriş yapılmadıysa uygulamanın devamını çalıştırma
+    st.stop()
 
 # --- VERİLERİ YÜKLEME ---
 def load_records():
@@ -142,4 +141,7 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                     "image_paths": uploaded_urls
                 }
                 try:
-                    supabase.
+                    supabase.table("notes_records").insert(new_record).execute()
+                    st.success("Kayıt başarıyla eklendi!")
+                    st.rerun()
+                except Exception
