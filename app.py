@@ -37,7 +37,6 @@ def load_records():
             for p in raw_paths:
                 if p:
                     p_str = str(p).strip()
-                    # Eğer tam URL değilse ama dosya adıysa manuel public URL'e çevir
                     if p_str.startswith("http"):
                         paths.append(p_str)
                     elif len(p_str) > 5 and not p_str.startswith("•"):
@@ -99,7 +98,7 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
             }
             try:
                 supabase.table("notes_records").insert(new_record).execute()
-                st.success("Kayıt ve görseller başarıyla eklendi!")
+                st.success("Kayıt başarıyla eklendi!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
@@ -139,11 +138,9 @@ if filtered_records:
             imgs = r.get("image_paths", [])
             valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
             if valid_imgs:
-                for img_url in valid_imgs:
-                    try:
-                        st.image(img_url, width=45)
-                    except Exception:
-                        pass
+                for idx, img_url in enumerate(valid_imgs):
+                    # st.image yerine doğrudan tıklanabilir link vererek test edelim
+                    st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
             else:
                 st.text("-")
                     
