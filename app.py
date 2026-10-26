@@ -117,9 +117,12 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
         if submit_btn:
             uploaded_urls = save_images(new_images)
             max_id = max([r.get("id", 0) for r in records], default=0) if records else 0
+            
+            # Supabase tablonuzla tam uyumlu olması için sütun adını 'name' olarak ayarladık
             new_record = {
                 "id": max_id + 1,
-                "text": new_text,
+                "name": new_text,
+                "text": new_text,  # Her ihtimale karşı her ikisini de ekledik
                 "date": new_date,
                 "note": new_note,
                 "image_paths": uploaded_urls
@@ -138,7 +141,7 @@ filtered_records = records
 if search_query:
     filtered_records = [
         r for r in records 
-        if search_query.lower() in str(r.get("text", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()
+        if search_query.lower() in str(r.get("text", "")).lower() or search_query.lower() in str(r.get("name", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()
     ]
 
 if filtered_records:
@@ -176,7 +179,7 @@ if filtered_records:
                     except Exception:
                         pass
             else:
-                st.text("-")  # st.write yerine st.text kullanılarak noktanın çıkması engellendi
+                st.text("-")
                     
         with col4:
             if st.button("Sil", key=f"del_{r.get('id', 0)}"):
