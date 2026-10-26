@@ -36,33 +36,21 @@ def load_records():
         response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
         records = response.data if response and response.data else []
         
-        # Supabase Storage public URL tabanını hazırlayalım (eski resimler nokta kalmasın diye)
-        url = "".join(str(st.secrets.get("SUPABASE_URL", "")).split())
-        if not url.startswith("http"):
-            url = "https://" + url
-        if url.endswith("/"):
-            url = url[:-1]
-        storage_base = f"{url}/storage/v1/object/public/{BUCKET_NAME}/"
-
         for r in records:
             paths = []
             raw_paths = r.get("image_paths", [])
             if not raw_paths and r.get("image_path"):
                 raw_paths = [r.get("image_path")]
-            
             if isinstance(raw_paths, str):
                 raw_paths = [raw_paths]
-                
+            
             for p in raw_paths:
                 if p:
                     p_str = str(p).strip()
-                    if p_str.startswith("http"):
+                    # Sadece geçerli ve ulaşılabilir olanları listeye ekle
+                    if p_str.startswith("http") or os.path.exists(p_str):
                         paths.append(p_str)
-                    else:
-                        filename = os.path.basename(p_str)
-                        paths.append(storage_base + filename)
             r["image_paths"] = paths
-            
         return records
     except Exception as e:
         try:
@@ -99,14 +87,12 @@ def save_images(uploaded_files):
                 unique_filename = f"{uuid.uuid4().hex}_{int(datetime.now().timestamp())}{file_ext}"
                 file_bytes = uploaded_file.getvalue()
                 
-                # Supabase Storage'a yükleme
                 supabase.storage.from_(BUCKET_NAME).upload(
                     path=unique_filename,
                     file=file_bytes,
                     file_options={"content-type": uploaded_file.type}
                 )
                 
-                # Public URL alma
                 public_url_response = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
                 if public_url_response:
                     image_paths.append(public_url_response)
@@ -159,7 +145,6 @@ if search_query:
 if filtered_records:
     st.write(f"Toplam {len(filtered_records)} kayıt gösteriliyor.")
     
-    # Tablo Başlıkları
     col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1, 1, 1])
     with col_h1:
         st.markdown("**İsim & Not**")
@@ -186,13 +171,13 @@ if filtered_records:
             imgs = r.get("image_paths", [])
             if imgs:
                 for img_url in imgs:
-                    if str(img_url).startswith("http"):
+                    try:
                         st.image(img_url, width=45)
-                    else:
-                        st.write("•")
+                    except Exception:
+                        st.write("-")
             else:
                 st.write("-")
-                
+                    
         with col4:
             if st.button("Sil", key=f"del_{r.get('id', 0)}"):
                 try:
