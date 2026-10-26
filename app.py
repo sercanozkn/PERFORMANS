@@ -47,8 +47,8 @@ def load_records():
             for p in raw_paths:
                 if p:
                     p_str = str(p).strip()
-                    # Sadece geçerli ve ulaşılabilir olanları listeye ekle
-                    if p_str.startswith("http") or os.path.exists(p_str):
+                    # Nokta veya geçersiz karakterleri kesinlikle ele
+                    if p_str and p_str != "•" and (p_str.startswith("http") or os.path.exists(p_str)):
                         paths.append(p_str)
             r["image_paths"] = paths
         return records
