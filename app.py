@@ -25,7 +25,7 @@ BUCKET_NAME = "notes-media"
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
-# Varsayılan kimlik bilgilerini session state üzerinde tutma (Ayarlar sekmesinden güncellenebilmesi için)
+# Varsayılan kimlik bilgilerini session state üzerinde tutma
 if "username" not in st.session_state:
     st.session_state["username"] = st.secrets.get("APP_USERNAME", "admin")
 if "password" not in st.session_state:
@@ -122,7 +122,6 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             else:
                 uploaded_urls = save_images(new_images)
                 
-                # 'id' alanını kaldırarak ekleme yapıyoruz; Supabase auto-increment ID üretsin.
                 new_record = {
                     "name": new_name,
                     "date": new_date,
@@ -150,7 +149,6 @@ with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
         
         settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
         if settings_submit:
-            # Doğrulama Kontrolleri
             if current_user_check != st.session_state["username"] or current_password != st.session_state["password"]:
                 st.error("Mevcut kullanıcı adı veya şifre yanlış!")
             elif new_password and new_password != confirm_password:
