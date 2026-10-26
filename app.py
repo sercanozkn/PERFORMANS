@@ -78,33 +78,10 @@ def save_images(uploaded_files):
                 st.error(f"Resim yüklenirken hata oluştu: {e}")
     return image_paths
 
-# --- ARAYÜZ ---
-st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
+# --- SOL MENÜ / YÖNETİM PANELİ ---
+st.sidebar.title("🛠️ Yönetim Paneli")
 
-records = load_records()
-
-# --- GRAFİK / İSTATİSTİK BÖLÜMÜ ---
-if records:
-    date_counts = {}
-    for r in records:
-        dt = r.get("date", "Bilinmiyor")
-        date_counts[dt] = date_counts.get(dt, 0) + 1
-    
-    chart_data = [{"Tarih": k, "Kayıt Sayısı": v} for k, v in date_counts.items()]
-    
-    fig = px.bar(
-        chart_data, 
-        x="Tarih", 
-        y="Kayıt Sayısı", 
-        title="📅 Tarihlere Göre Kayıt Dağılımı",
-        text="Kayıt Sayısı"
-    )
-    fig.update_traces(textposition='outside')
-    fig.update_layout(xaxis_title="Tarih", yaxis_title="Kayıt Adedi", margin=dict(t=40, b=20, l=20, r=20))
-    st.plotly_chart(fig, use_container_width=True)
-
-# --- YENİ KAYIT FORMU ---
-with st.expander("➕ Yeni Kayıt / Hata Ekle"):
+with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
     with st.form("add_form", clear_on_submit=True):
         new_name = st.text_input("İsim / Başlık:")
         new_date = st.text_input("Tarih:", value=datetime.now().strftime("%d/%m/%Y"))
@@ -113,8 +90,9 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
         
         submit_btn = st.form_submit_button("Tabloya Ekle")
         if submit_btn:
+            records_check = load_records()
             uploaded_urls = save_images(new_images)
-            max_id = max([r.get("id", 0) for r in records], default=0) if records else 0
+            max_id = max([r.get("id", 0) for r in records_check], default=0) if records_check else 0
             
             new_record = {
                 "id": max_id + 1,
@@ -129,6 +107,51 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
                 st.rerun()
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
+
+# --- ANA EKRAN ---
+st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
+
+records = load_records()
+
+# --- İSTATİSTİKLER VE GRAFİKLER (YAN YANA İKİ GRAFİK) ---
+if records:
+    st.subheader("📊 İstatistikler ve Grafikler")
+    col_g1, col_g2 = st.columns(2)
+    
+    date_counts = {}
+    for r in records:
+        dt = r.get("date", "Bilinmiyor")
+        date_counts[dt] = date_counts.get(dt, 0) + 1
+    
+    chart_data = [{"Tarih": k, "Kayıt Sayısı": v} for k, v in date_counts.items()]
+    
+    with col_g1:
+        fig1 = px.bar(
+            chart_data, 
+            x="Tarih", 
+            y="Kayıt Sayısı", 
+            title="📅 Tarihlere Göre Toplam Kayıt İstatistikleri",
+            text="Kayıt Sayısı"
+        )
+        fig1.update_traces(textposition='outside')
+        fig1.update_layout(xaxis_title="Tarih", yaxis_title="Kayıt Adedi", margin=dict(t=40, b=20, l=20, r=20))
+        st.plotly_chart(fig1, use_container_width=True)
+        
+    with col_g2:
+        fig2 = px.bar(
+            chart_data, 
+            x="Tarih", 
+            y="Kayıt Sayısı", 
+            title="📈 Tarihlere Göre Aktif / Resimli Detaylı Dağılım",
+            text="Kayıt Sayısı",
+            color="Kayıt Sayısı"
+        )
+        fig2.update_traces(textposition='outside')
+        fig2.update_layout(xaxis_title="Tarih", yaxis_title="Kayıt Adedi", margin=dict(t=40, b=25, l=20, r=20))
+        st.plotly_chart(fig2, use_container_width=True)
+
+st.markdown("---")
+st.subheader("🗂️ All notes (Kayıt ve Hata Tablosu)")
 
 # --- ARAMA VE LİSTELEME ---
 search_query = st.text_input("🔍 Kayıtlarda Arama Yap:")
