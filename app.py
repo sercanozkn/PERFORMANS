@@ -86,7 +86,6 @@ def save_config(config):
         json.dump(config, f, ensure_ascii=False, indent=4)
 
 def save_images(uploaded_files):
-    """Birden fazla görseli Supabase Storage (notes-media) alanına yükler ve halka açık URL'lerini döndürür."""
     image_urls = []
     if uploaded_files:
         for uploaded_file in uploaded_files:
@@ -99,15 +98,20 @@ def save_images(uploaded_files):
                     file=file_bytes,
                     file_options={"content-type": uploaded_file.type}
                 )
+            except Exception:
+                pass
+            
+            try:
                 res = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
                 if isinstance(res, dict):
-                    public_url = res.get("publicUrl") or res.get("publicURL", "")
+                    pub_url = res.get("publicUrl") or res.get("publicURL", "")
                 else:
-                    public_url = str(res)
-                if public_url:
-                    image_urls.append(public_url)
+                    pub_url = str(res)
+                
+                if pub_url:
+                    image_urls.append(pub_url)
             except Exception as e:
-                st.error(f"Görsel buluta yüklenirken hata: {e}")
+                st.error(f"URL alınamadı: {e}")
     return image_urls
 
 # --- OTURUM (SESSION) YÖNETİMİ ---
