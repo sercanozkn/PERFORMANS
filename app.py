@@ -47,7 +47,6 @@ def load_records():
             for p in raw_paths:
                 if p:
                     p_str = str(p).strip()
-                    # Kesinlikle sadece http ile başlayan gerçek bağlantıları al
                     if p_str.startswith("http"):
                         paths.append(p_str)
             r["image_paths"] = paths
