@@ -31,23 +31,6 @@ if "app_username" not in st.session_state:
 if "app_password" not in st.session_state:
     st.session_state["app_password"] = "1234"
 
-# --- GİRİŞ EKRANI ---
-if not st.session_state["logged_in"]:
-    st.title("🔐 Notes - Kullanıcı Girişi")
-    with st.form("login_form"):
-        username_input = st.text_input("Kullanıcı Adı:")
-        password_input = st.text_input("Şifre:", type="password")
-        login_btn = st.form_submit_button("Giriş Yap")
-        
-        if login_btn:
-            if username_input == st.session_state["app_username"] and password_input == st.session_state["app_password"]:
-                st.session_state["logged_in"] = True
-                st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
-                st.rerun()
-            else:
-                st.error("Kullanıcı adı veya şifre hatalı!")
-    st.stop()
-
 # --- VERİLERİ YÜKLEME ---
 def load_records():
     try:
@@ -105,6 +88,23 @@ def save_images(uploaded_files):
                 st.error(f"Resim yüklenirken hata oluştu: {e}")
     return image_paths
 
+# --- GİRİŞ KONTROL EKRANI ---
+if not st.session_state["logged_in"]:
+    st.title("🔐 Notes - Kullanıcı Girişi")
+    with st.form("login_form"):
+        username_input = st.text_input("Kullanıcı Adı:")
+        password_input = st.text_input("Şifre:", type="password")
+        login_btn = st.form_submit_button("Giriş Yap")
+        
+        if login_btn:
+            if username_input == st.session_state["app_username"] and password_input == st.session_state["app_password"]:
+                st.session_state["logged_in"] = True
+                st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
+                st.rerun()
+            else:
+                st.error("Kullanıcı adı veya şifre hatalı!")
+    st.stop()
+
 # --- SOL MENÜ / YÖNETİM PANELİ ---
 st.sidebar.title("🛠️ Yönetim Paneli")
 
@@ -135,3 +135,28 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                 st.rerun()
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
+
+# 2. Ayarlar Sekmesi (Kalıcı Güncelleme)
+with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
+    with st.form("settings_form"):
+        st.write("**Kullanıcı Bilgileri**")
+        current_username_input = st.text_input("Mevcut Kullanıcı Adı:")
+        new_username_input = st.text_input("Yeni Kullanıcı Adı:")
+        
+        st.write("**Şifre Değiştir**")
+        current_password_input = st.text_input("Mevcut Şifre:", type="password")
+        new_password_input = st.text_input("Yeni Şifre:", type="password")
+        confirm_password_input = st.text_input("Yeni Şifre (Tekrar):", type="password")
+        
+        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
+        if settings_submit:
+            if current_username_input != st.session_state["app_username"] or current_password_input != st.session_state["app_password"]:
+                st.error("Mevcut kullanıcı adı veya şifre hatalı!")
+            elif new_password_input and new_password_input != confirm_password_input:
+                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
+            else:
+                if new_username_input.strip():
+                    st.session_state["app_username"] = new_username_input.strip()
+                if new_password_input.strip():
+                    st.session_state["app_password"] = new_password_input.strip()
+                st.success("Bilgiler başarıyla güncellendi! Lütfen çıkış yapıp yeni bilgileriniz
