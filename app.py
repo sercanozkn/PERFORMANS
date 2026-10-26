@@ -122,4 +122,28 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             uploaded_urls = save_images(new_images)
             max_id = max([r.get("id", 0) for r in records_check], default=0) if records_check else 0
             
-            new_record
+            new_record = {
+                "id": max_id + 1,
+                "name": new_name,
+                "date": new_date,
+                "note": new_note,
+                "image_paths": uploaded_urls
+            }
+            try:
+                supabase.table("notes_records").insert(new_record).execute()
+                st.success("Kayıt başarıyla eklendi!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Kayıt eklenirken hata oluştu: {e}")
+
+# 2. Ayarlar Sekmesi (Kalıcı Güncelleme)
+with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
+    with st.form("settings_form"):
+        st.write("**Kullanıcı Bilgileri**")
+        current_username_input = st.text_input("Mevcut Kullanıcı Adı:")
+        new_username_input = st.text_input("Yeni Kullanıcı Adı:")
+        
+        st.write("**Şifre Değiştir**")
+        current_password_input = st.text_input("Mevcut Şifre:", type="password")
+        new_password_input = st.text_input("Yeni Şifre:", type="password")
+        confirm_password_input = st
