@@ -195,29 +195,4 @@ for r in filtered_records:
     else:
         with st.form(key=f"edit_form_{rec_id}"):
             st.markdown(f"### Kaydı Düzenle (ID: {rec_id})")
-            new_edit_name = st.text_input("İsim / Başlık", value=r.get("name", ""))
-            new_edit_date = st.text_input("Tarih", value=r.get("date", ""))
-            new_edit_note = st.text_area("Not / Açıklama", value=r.get("note", ""))
-            
-            col_save, col_cancel = st.columns(2)
-            save_clicked = col_save.form_submit_button("Kaydet")
-            cancel_clicked = col_cancel.form_submit_button("İptal")
-            
-            if save_clicked:
-                try:
-                    supabase.table("notes_records").update({
-                        "name": new_edit_name,
-                        "date": new_edit_date,
-                        "note": new_edit_note
-                    }).eq("id", rec_id).execute()
-                    st.session_state[edit_key] = False
-                    st.success("Kayıt güncellendi!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Güncelleme hatası: {e}")
-                    
-            if cancel_clicked:
-                st.session_state[edit_key] = False
-                st.rerun()
-
-    st.markdown("---")
+            new_edit_name = st.text_input("İsim / Başlık", value=r.
