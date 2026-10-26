@@ -87,6 +87,11 @@ def save_config(config):
 
 def save_images(uploaded_files):
     image_urls = []
+    base_url = str(st.secrets.get("SUPABASE_URL", "")).strip().strip('"').strip("'")
+    if not base_url.startswith("http"):
+        base_url = "https://" + base_url
+    base_url = base_url.rstrip("/")
+
     if uploaded_files:
         for uploaded_file in uploaded_files:
             file_ext = os.path.splitext(uploaded_file.name)[1]
@@ -101,19 +106,10 @@ def save_images(uploaded_files):
             except Exception:
                 pass
             
-            try:
-                res = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
-                if isinstance(res, dict):
-                    pub_url = res.get("publicUrl") or res.get("publicURL", "")
-                else:
-                    pub_url = str(res)
-                
-                if pub_url:
-                    image_urls.append(pub_url)
-            except Exception as e:
-                st.error(f"URL alınamadı: {e}")
+            public_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
+            image_urls.append(public_url)
+            
     return image_urls
-
 # --- OTURUM (SESSION) YÖNETİMİ ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
