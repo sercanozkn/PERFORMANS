@@ -21,15 +21,26 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM & KULLANICI YÖNETİMİ ---
+# --- OTURUM & KULLANICI YÖNETİMİ (VERİTABANINDAN ÇEKME) ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
-# Varsayılan kimlik bilgilerini session state üzerinde tutma
-if "username" not in st.session_state:
-    st.session_state["username"] = st.secrets.get("APP_USERNAME", "admin")
-if "password" not in st.session_state:
-    st.session_state["password"] = st.secrets.get("APP_PASSWORD", "1234")
+def get_db_user():
+    """Supabase'den kullanıcı bilgilerini çeker, yoksa varsayılan oluşturur."""
+    try:
+        res = supabase.table("notes_users").select("*").limit(1).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+        else:
+            # Tablo boşsa varsayılan ekle
+            default_user = {"username": "admin", "password": "1234"}
+            supabase.table("notes_users").insert(default_user).execute()
+            return default_user
+    except Exception:
+        # Tablo henüz oluşturulmadıysa geçici nesne dön
+        return {"id": 1, "username": "admin", "password": "1234"}
+
+db_user = get_db_user()
 
 if not st.session_state["logged_in"]:
     st.title("🔐 Notes - Kullanıcı Girişi")
@@ -39,7 +50,7 @@ if not st.session_state["logged_in"]:
         login_btn = st.form_submit_button("Giriş Yap")
         
         if login_btn:
-            if username_input == st.session_state["username"] and password_input == st.session_state["password"]:
+            if username_input == db_user.get("username") and password_input == db_user.get("password"):
                 st.session_state["logged_in"] = True
                 st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
                 st.rerun()
@@ -135,12 +146,12 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                 except Exception as e:
                     st.error(f"Kayıt eklenirken hata oluştu: {e}")
 
-# 2. Ayarlar Sekmesi (Şifre & Kullanıcı Adı Güncelleme)
+# 2. Ayarlar Sekmesi (Şifre & Kullanıcı Adı Güncelleme - Kalıcı)
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
     with st.form("settings_form"):
         st.write("**Kullanıcı Bilgileri Değiştir**")
         current_user_check = st.text_input("Mevcut Kullanıcı Adı:")
-        new_username = st.text_input("Yeni Kullanıcı Adı:")
+        new_username = st.text_input("Yeni Kullanıcı Adı (İsteğe bağlı):")
         
         st.write("**Şifre Değiştir**")
         current_password = st.text_input("Mevcut Şifre:", type="password")
@@ -149,16 +160,28 @@ with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
         
         settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
         if settings_submit:
-            if current_user_check != st.session_state["username"] or current_password != st.session_state["password"]:
+            if current_user_check != db_user.get("username") or current_password != db_user.get("password"):
                 st.error("Mevcut kullanıcı adı veya şifre yanlış!")
             elif new_password and new_password != confirm_password:
                 st.error("Yeni şifreler birbiriyle uyuşmuyor!")
             else:
+                updated_data = {}
                 if new_username.strip():
-                    st.session_state["username"] = new_username.strip()
+                    updated_data["username"] = new_username.strip()
                 if new_password.strip():
-                    st.session_state["password"] = new_password.strip()
-                st.success("Ayarlar başarıyla güncellendi!")
+                    updated_data["password"] = new_password.strip()
+                
+                if updated_data:
+                    try:
+                        # Supabase üzerindeki kullanıcı bilgilerini güncelle
+                        supabase.table("notes_users").update(updated_data).eq("id", db_user.get("id", 1)).execute()
+                        st.success("Ayarlar başarıyla veritabanına kaydedildi! Yeniden giriş yapılıyor...")
+                        st.session_state["logged_in"] = False
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Güncellenirken hata oluştu: Tablo kontrolü yapın ({e})")
+                else:
+                    st.warning("Değiştirilecek yeni bir bilgi girmediniz.")
 
 st.sidebar.markdown("---")
 
@@ -268,7 +291,7 @@ if filtered_records:
                 st.text("-")
                     
         with col4:
-            if st.button("Sil", key=f"del_{rec_id}"):
+            if st.button("SİL", key=f"del_{rec_id}"):
                 try:
                     supabase.table("notes_records").delete().eq("id", rec_id).execute()
                     st.success("Kayıt silindi!")
