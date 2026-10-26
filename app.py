@@ -134,6 +134,10 @@ if st.sidebar.button("🚪 Cikis Yap"):
 st.title("📝 Notes - Hata ve Kayit Takip Paneli")
 records = load_records()
 
+# Toplam Kayıt Sayısını Gösteren Metrik Kutusu
+total_count = len(records)
+st.metric(label="📊 Toplam Kayıt Sayısı", value=total_count)
+
 if records:
     st.subheader("📊 Istatistikler ve Grafikler")
     col_g1, col_g2 = st.columns(2)
@@ -157,6 +161,8 @@ st.markdown("---")
 st.subheader("🗂️ Tum Kayitlar")
 search_query = st.text_input("🔍 Arama Yap:")
 filtered_records = [r for r in records if search_query.lower() in str(r.get("name", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()] if search_query else records
+
+st.info(f"Listelenen Kayıt Sayısı: **{len(filtered_records)}**")
 
 for r in filtered_records:
     rec_id = r.get("id")
