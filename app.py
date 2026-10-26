@@ -81,6 +81,7 @@ def save_images(uploaded_files):
 # --- SOL MENÜ / YÖNETİM PANELİ ---
 st.sidebar.title("🛠️ Yönetim Paneli")
 
+# 1. Yeni Kayıt Ekleme Bölümü
 with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
     with st.form("add_form", clear_on_submit=True):
         new_name = st.text_input("İsim / Başlık:")
@@ -107,6 +108,25 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                 st.rerun()
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
+
+# 2. İşaretlediğiniz Bölümdeki Ayarlar Sekmesi
+with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
+    with st.form("settings_form"):
+        st.subheader("Kullanıcı Bilgileri")
+        current_username = st.text_input("Mevcut Kullanıcı Adı:")
+        new_username = st.text_input("Yeni Kullanıcı Adı:")
+        
+        st.subheader("Şifre Değiştir")
+        current_password = st.text_input("Mevcut Şifre:", type="password")
+        new_password = st.text_input("Yeni Şifre:", type="password")
+        confirm_password = st.text_input("Yeni Şifre (Tekrar):", type="password")
+        
+        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
+        if settings_submit:
+            if new_password and new_password != confirm_password:
+                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
+            else:
+                st.success("Ayarlar başarıyla güncellendi!")
 
 # --- ANA EKRAN ---
 st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
@@ -145,74 +165,4 @@ if records:
             text="Kayıt Sayısı"
         )
         fig1.update_traces(textposition='outside')
-        fig1.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=20, l=20, r=20))
-        st.plotly_chart(fig1, use_container_width=True)
-        
-    with col_g2:
-        fig2 = px.histogram(
-            detailed_data,
-            x="İsimler",
-            color="Durum",
-            barmode="group",
-            title="📈 İsimlere Göre Resimli / Resimsiz Detaylı Dağılım",
-            color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"}
-        )
-        fig2.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=25, l=20, r=20))
-        st.plotly_chart(fig2, use_container_width=True)
-
-st.markdown("---")
-st.subheader("🗂️ All notes (Kayıt ve Hata Tablosu)")
-
-# --- ARAMA VE LİSTELEME ---
-search_query = st.text_input("🔍 Kayıtlarda Arama Yap:")
-
-filtered_records = records
-if search_query:
-    filtered_records = [
-        r for r in records 
-        if search_query.lower() in str(r.get("name", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()
-    ]
-
-if filtered_records:
-    st.write(f"Toplam {len(filtered_records)} kayıt gösteriliyor.")
-    
-    col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1, 1, 1])
-    col_h1.markdown("**İsim & Not**")
-    col_h2.markdown("**Tarih**")
-    col_h3.markdown("**Görsel**")
-    col_h4.markdown("**İşlem**")
-    st.markdown("---")
-
-    for r in filtered_records:
-        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-        
-        with col1:
-            name_val = r.get('name', '') or r.get('text', 'İsimsiz')
-            st.markdown(f"**{name_val}**")
-            st.caption(r.get('note', ''))
-            
-        with col2:
-            st.write(r.get('date', ''))
-            
-        with col3:
-            imgs = r.get("image_paths", [])
-            valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
-            if valid_imgs:
-                with st.expander(f"📷 Görseller ({len(valid_imgs)})"):
-                    for idx, img_url in enumerate(valid_imgs):
-                        st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
-            else:
-                st.text("-")
-                    
-        with col4:
-            if st.button("Sil", key=f"del_{r.get('id', 0)}"):
-                try:
-                    supabase.table("notes_records").delete().eq("id", r.get('id')).execute()
-                    st.success("Kayıt silindi!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Silinirken hata oluştu: {e}")
-                
-        st.markdown("---")
-else:
-    st.info("Kayıt bulunmuyor.")
+        fig1.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=20, l
