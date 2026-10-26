@@ -195,4 +195,38 @@ for r in filtered_records:
     else:
         with st.form(key=f"edit_form_{rec_id}"):
             st.markdown(f"### Kaydı Düzenle (ID: {rec_id})")
-            new_edit_name = st.text_input("İsim / Başlık", value=r.
+            new_edit_name = st.text_input("İsim / Başlık", value=r.get("name", ""))
+            new_edit_date = st.text_input("Tarih", value=r.get("date", ""))
+            new_edit_note = st.text_area("Not / Açıklama", value=r.get("note", ""))
+            
+            existing_imgs = [i for i in r.get("image_paths", []) if str(i).startswith("http")]
+            st.write(f"Mevcut Görsel Sayısı: {len(existing_imgs)}")
+            new_edit_images = st.file_uploader("Yeni Görsel Ekle (İsteğe bağlı):", type=["jpg", "png", "jpeg"], accept_multiple_files=True, key=f"edit_img_{rec_id}")
+            
+            col_save, col_cancel = st.columns(2)
+            save_clicked = col_save.form_submit_button("Kaydet")
+            cancel_clicked = col_cancel.form_submit_button("İptal")
+            
+            if save_clicked:
+                try:
+                    new_uploaded_urls = save_images(new_edit_images)
+                    combined_images = existing_imgs + new_uploaded_urls
+                    
+                    supabase.table("notes_records").update({
+                        "name": new_edit_name,
+                        "date": new_edit_date,
+                        "note": new_edit_note,
+                        "image_paths": combined_images
+                    }).eq("id", rec_id).execute()
+                    
+                    st.session_state[edit_key] = False
+                    st.success("Kayıt ve görseller güncellendi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Güncelleme hatası: {e}")
+                    
+            if cancel_clicked:
+                st.session_state[edit_key] = False
+                st.rerun()
+
+    st.markdown("---")
