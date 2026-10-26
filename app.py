@@ -122,12 +122,4 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             uploaded_urls = save_images(new_images)
             max_id = max([r.get("id", 0) for r in records_check], default=0) if records_check else 0
             
-            new_record = {
-                "id": max_id + 1,
-                "name": new_name,
-                "date": new_date,
-                "note": new_note,
-                "image_paths": uploaded_urls
-            }
-            try:
-                supabase
+            new_record
