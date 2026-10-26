@@ -21,26 +21,14 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM & KULLANICI YONETIMI (GARANTİLİ GİRİŞ) ---
+# --- OTURUM & KULLANICI YONETIMI (GARANTILI SABİT GİRİŞ) ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
     st.title("🔐 Notes - Kullanici Girisi")
     
-    # Veritabanındaki kullanıcıları çekelim
-    try:
-        res = supabase.table("notes_users").select("*").execute()
-        users_list = res.data if res.data else []
-    except Exception as e:
-        users_list = []
-        st.error(f"Veritabani hatasi: {e}")
-
-    # Hata ayıklama için veritabanında ne olduğunu ekranda görelim
-    if users_list:
-        st.info(f"Veritabanındaki aktif kullanıcı: **{users_list[0].get('username')}** / Şifresi: **{users_list[0].get('password')}**")
-    else:
-        st.warning("Veritabanında hiç kullanıcı bulunamadı! Lütfen SQL Editörden kullanıcı ekleyin.")
+    st.info("💡 **Giriş Bilgileriniz:** Kullanıcı Adı: **sercan** | Şifre: **134679**")
 
     with st.form("login_form"):
         username_input = st.text_input("Kullanıcı Adı:")
@@ -48,12 +36,11 @@ if not st.session_state["logged_in"]:
         login_btn = st.form_submit_button("Giriş Yap")
         
         if login_btn:
-            # Büyük/küçük harf duyarlılığını ortadan kaldıran esnek kontrol
-            if users_list and str(users_list[0].get("username")).strip().lower() == username_input.strip().lower() and str(users_list[0].get("password")).strip() == password_input.strip():
+            # Doğrudan sabit bilgilerimizle kontrol ediyoruz
+            if username_input.strip().lower() == "sercan" and password_input.strip() == "134679":
                 st.session_state["logged_in"] = True
-                st.session_state["user_id"] = users_list[0].get("id")
-                st.session_state["username"] = users_list[0].get("username")
-                st.success("Giriş başarılı!")
+                st.session_state["username"] = "sercan"
+                st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
                 st.rerun()
             else:
                 st.error("Kullanıcı adı veya şifre hatalı!")
@@ -139,27 +126,8 @@ with st.sidebar.expander("➕ Yeni Kayit / Hata Ekle", expanded=True):
                     st.error(f"Hata: {e}")
 
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
-    with st.form("settings_form"):
-        st.write("**Sifre Degistir**")
-        curr_p = st.text_input("Mevcut Sifre:", type="password")
-        new_p = st.text_input("Yeni Sifre:", type="password")
-        conf_p = st.text_input("Yeni Sifre (Tekrar):", type="password")
-        
-        if st.form_submit_button("Guncelle"):
-            try:
-                res = supabase.table("notes_users").select("*").eq("id", st.session_state.get("user_id", 1)).execute()
-                if res.data and res.data[0].get("password") == curr_p:
-                    if new_p == conf_p and new_p.strip():
-                        supabase.table("notes_users").update({"password": new_p.strip()}).eq("id", st.session_state.get("user_id", 1)).execute()
-                        st.success("Sifre degistirildi! Tekrar giris yapin.")
-                        st.session_state["logged_in"] = False
-                        st.rerun()
-                    else:
-                        st.error("Yeni sifreler uyusmuyor!")
-                else:
-                    st.error("Mevcut sifre hatali!")
-            except Exception as e:
-                st.error(f"Hata: {e}")
+    st.write("Mevcut Kullanıcı: **sercan**")
+    st.write("Şifreniz: **134679**")
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🚪 Cikis Yap"):
