@@ -134,7 +134,7 @@ if st.sidebar.button("🚪 Cikis Yap"):
 st.title("📝 Notes - Hata ve Kayit Takip Paneli")
 records = load_records()
 
-# Toplam Kayıt Sayısını Gösteren Metrik Kutusu
+# Toplam Kayıt Sayısı
 total_count = len(records)
 st.metric(label="📊 Toplam Kayıt Sayısı", value=total_count)
 
@@ -173,8 +173,9 @@ for r in filtered_records:
     
     imgs = [i for i in r.get("image_paths", []) if str(i).startswith("http")]
     if imgs:
-        with c3.expander(f"📷 ({len(imgs)})"):
-            for idx, u in enumerate(imgs): c3.markdown(f"[Görsel {idx+1}]({u})")
+        with c3:
+            for idx, u in enumerate(imgs):
+                st.markdown(f"[Görsel {idx+1}]({u})", unsafe_allow_html=True)
     else:
         c3.text("-")
         
