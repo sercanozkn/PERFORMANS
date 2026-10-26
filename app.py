@@ -47,8 +47,8 @@ def load_records():
             for p in raw_paths:
                 if p:
                     p_str = str(p).strip()
-                    # Nokta veya geçersiz karakterleri kesinlikle ele
-                    if p_str and p_str != "•" and (p_str.startswith("http") or os.path.exists(p_str)):
+                    # Sadece geçerli http linklerini al, noktaları ve bozuk yolları reddet
+                    if p_str and p_str != "•" and p_str.startswith("http"):
                         paths.append(p_str)
             r["image_paths"] = paths
         return records
@@ -78,7 +78,7 @@ def save_config(config):
         json.dump(config, f, ensure_ascii=False, indent=4)
 
 def save_images(uploaded_files):
-    """Birden fazla görseli Supabase Storage'a yükler ve public URL'lerini döndürür."""
+    """Birden fazla görseli Supabase Storage'ar yükler ve public URL'lerini döndürür."""
     image_paths = []
     if uploaded_files:
         for uploaded_file in uploaded_files:
