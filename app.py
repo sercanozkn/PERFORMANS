@@ -21,6 +21,27 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
+# --- OTURUM YÖNETİMİ (GİRİŞ KONTROLÜ) ---
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    st.title("🔐 Notes - Kullanıcı Girişi")
+    with st.form("login_form"):
+        username_input = st.text_input("Kullanıcı Adı:")
+        password_input = st.text_input("Şifre:", type="password")
+        login_btn = st.form_submit_button("Giriş Yap")
+        
+        if login_btn:
+            # Varsayılan kullanıcı adı ve şifre kontrolü (istediğiniz gibi değiştirebilirsiniz)
+            if username_input == "admin" and password_input == "1234":
+                st.session_state["logged_in"] = True
+                st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
+                st.rerun()
+            else:
+                st.error("Kullanıcı adı veya şifre hatalı!")
+    st.stop() # Giriş yapılmadıysa uygulamanın devamını çalıştırma
+
 # --- VERİLERİ YÜKLEME ---
 def load_records():
     try:
@@ -127,6 +148,12 @@ with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
                 st.error("Yeni şifreler birbiriyle uyuşmuyor!")
             else:
                 st.success("Ayarlar başarıyla güncellendi!")
+
+st.sidebar.markdown("---")
+# 3. Çıkış Yap Butonu
+if st.sidebar.button("🚪 Çıkış Yap"):
+    st.session_state["logged_in"] = False
+    st.rerun()
 
 # --- ANA EKRAN ---
 st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
