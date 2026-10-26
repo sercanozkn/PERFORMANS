@@ -130,33 +130,4 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                 "image_paths": uploaded_urls
             }
             try:
-                supabase.table("notes_records").insert(new_record).execute()
-                st.success("Kayıt başarıyla eklendi!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Kayıt eklenirken hata oluştu: {e}")
-
-# 2. Ayarlar Sekmesi (Kalıcı Güncelleme)
-with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
-    with st.form("settings_form"):
-        st.write("**Kullanıcı Bilgileri**")
-        current_username_input = st.text_input("Mevcut Kullanıcı Adı:")
-        new_username_input = st.text_input("Yeni Kullanıcı Adı:")
-        
-        st.write("**Şifre Değiştir**")
-        current_password_input = st.text_input("Mevcut Şifre:", type="password")
-        new_password_input = st.text_input("Yeni Şifre:", type="password")
-        confirm_password_input = st.text_input("Yeni Şifre (Tekrar):", type="password")
-        
-        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
-        if settings_submit:
-            if current_username_input != st.session_state["app_username"] or current_password_input != st.session_state["app_password"]:
-                st.error("Mevcut kullanıcı adı veya şifre hatalı!")
-            elif new_password_input and new_password_input != confirm_password_input:
-                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
-            else:
-                if new_username_input.strip():
-                    st.session_state["app_username"] = new_username_input.strip()
-                if new_password_input.strip():
-                    st.session_state["app_password"] = new_password_input.strip()
-                st.success("Bilgiler başarıyla güncellendi! Lütfen çıkış yapıp yeni bilgileriniz
+                supabase
