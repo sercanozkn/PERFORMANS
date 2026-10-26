@@ -55,15 +55,19 @@ def save_images(uploaded_files):
                 unique_filename = f"{uuid.uuid4().hex}_{int(datetime.now().timestamp())}{file_ext}"
                 file_bytes = uploaded_file.getvalue()
                 
+                # Supabase Storage'a yükleme
                 supabase.storage.from_(BUCKET_NAME).upload(
                     path=unique_filename,
                     file=file_bytes,
                     file_options={"content-type": uploaded_file.type}
                 )
                 
-                public_url_response = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
-                if public_url_response:
-                    image_paths.append(public_url_response)
+                # Public URL alma (Doğru format)
+                res = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
+                if isinstance(res, dict) and "publicUrl" in res:
+                    image_paths.append(res["publicUrl"])
+                elif isinstance(res, str):
+                    image_paths.append(res)
             except Exception as e:
                 st.error(f"Resim yüklenirken hata oluştu: {e}")
     return image_paths
@@ -86,7 +90,6 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
             uploaded_urls = save_images(new_images)
             max_id = max([r.get("id", 0) for r in records], default=0) if records else 0
             
-            # Supabase tablosu ile birebir uyumlu, 'text' içermeyen kayıt sözlüğü
             new_record = {
                 "id": max_id + 1,
                 "name": new_name,
@@ -96,7 +99,7 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
             }
             try:
                 supabase.table("notes_records").insert(new_record).execute()
-                st.success("Kayıt başarıyla eklendi!")
+                st.success("Kayıt ve görseller başarıyla eklendi!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
