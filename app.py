@@ -174,4 +174,5 @@ for r in filtered_records:
         
     if c4.button("Sil", key=f"del_{rec_id}"):
         supabase.table("notes_records").delete().eq("id", rec_id).execute()
-        st.
+        st.rerun()
+    st.markdown("---")
