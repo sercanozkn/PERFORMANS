@@ -109,60 +109,9 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
 
-# 2. İşaretlediğiniz Bölümdeki Ayarlar Sekmesi
+# 2. Ayarlar Sekmesi
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
     with st.form("settings_form"):
         st.subheader("Kullanıcı Bilgileri")
         current_username = st.text_input("Mevcut Kullanıcı Adı:")
-        new_username = st.text_input("Yeni Kullanıcı Adı:")
-        
-        st.subheader("Şifre Değiştir")
-        current_password = st.text_input("Mevcut Şifre:", type="password")
-        new_password = st.text_input("Yeni Şifre:", type="password")
-        confirm_password = st.text_input("Yeni Şifre (Tekrar):", type="password")
-        
-        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
-        if settings_submit:
-            if new_password and new_password != confirm_password:
-                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
-            else:
-                st.success("Ayarlar başarıyla güncellendi!")
-
-# --- ANA EKRAN ---
-st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
-
-records = load_records()
-
-# --- İSTATİSTİKLER VE GRAFİKLER (İSİMLERE GÖRE) ---
-if records:
-    st.subheader("📊 İstatistikler ve Grafikler")
-    col_g1, col_g2 = st.columns(2)
-    
-    name_counts = {}
-    detailed_data = []
-    
-    for r in records:
-        name_val = str(r.get("name", "") or r.get("text", "İsimsiz")).strip()
-        if not name_val:
-            name_val = "İsimsiz"
-            
-        name_counts[name_val] = name_counts.get(name_val, 0) + 1
-        
-        imgs = r.get("image_paths", [])
-        valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
-        has_image = "Resimli Kayıt" if valid_imgs else "Resimsiz Kayıt"
-        
-        detailed_data.append({"İsimler": name_val, "Durum": has_image})
-    
-    chart_data1 = [{"İsimler": k, "Kayıt Sayısı": v} for k, v in name_counts.items()]
-    
-    with col_g1:
-        fig1 = px.bar(
-            chart_data1, 
-            x="İsimler", 
-            y="Kayıt Sayısı", 
-            title="👤 İsimlere Göre Toplam Kayıt İstatistikleri",
-            text="Kayıt Sayısı"
-        )
-        fig1.update_traces(textposition='outside')
-        fig1.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=20, l
+        new_username = st.text
