@@ -5,7 +5,7 @@ from datetime import datetime
 import uuid
 import streamlit as st
 import plotly.express as px
-
+from supabase import create_client, Client
 # --- SAYFA AYARI ---
 st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide", page_icon="📝")
 
