@@ -109,9 +109,24 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
 
-# 2. Ayarlar Sekmesi
+# 2. Ayarlar Sekmesi (Şifre ve Kullanıcı Adı Değiştirme)
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
     with st.form("settings_form"):
-        st.subheader("Kullanıcı Bilgileri")
+        st.write("**Kullanıcı Bilgileri**")
         current_username = st.text_input("Mevcut Kullanıcı Adı:")
-        new_username = st.text
+        new_username = st.text_input("Yeni Kullanıcı Adı:")
+        
+        st.write("**Şifre Değiştir**")
+        current_password = st.text_input("Mevcut Şifre:", type="password")
+        new_password = st.text_input("Yeni Şifre:", type="password")
+        confirm_password = st.text_input("Yeni Şifre (Tekrar):", type="password")
+        
+        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
+        if settings_submit:
+            if new_password and new_password != confirm_password:
+                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
+            else:
+                st.success("Ayarlar başarıyla güncellendi!")
+
+# --- ANA EKRAN ---
+st.title("📝
