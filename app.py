@@ -176,7 +176,7 @@ if filtered_records:
                     except Exception:
                         pass
             else:
-                st.write("-")
+                st.text("-")  # st.write yerine st.text kullanılarak noktanın çıkması engellendi
                     
         with col4:
             if st.button("Sil", key=f"del_{r.get('id', 0)}"):
