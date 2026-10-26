@@ -21,7 +21,7 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM & KULLANICI YÖNETİMİ (VERİTABANI BAĞLANTILI) ---
+# --- OTURUM & KULLANICI YÖNETİMİ ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
@@ -113,13 +113,12 @@ def save_images(uploaded_files):
                 public_url = f"{clean_base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
                 image_paths.append(public_url)
             except Exception as e:
-                st.error(f"Resim ({uploaded_file.name}) yüklenirken hata oluştu: {e}")
+                st.error(f"Resim yüklenirken hata oluştu: {e}")
     return image_paths
 
 # --- SOL MENÜ / YÖNETİM PANELİ ---
 st.sidebar.title("🛠️ Yönetim Paneli")
 
-# 1. Yeni Kayıt Ekleme Bölümü
 with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
     with st.form("add_form", clear_on_submit=True):
         new_name = st.text_input("İsim / Başlık:")
@@ -144,4 +143,29 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                     supabase.table("notes_records").insert(new_record).execute()
                     st.success("Kayıt başarıyla eklendi!")
                     st.rerun()
-                except Exception
+                except Exception as e:
+                    st.error(f"Kayıt eklenirken hata oluştu: {e}")
+
+with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
+    with st.form("settings_form"):
+        st.write("**Kullanıcı Bilgileri Değiştir**")
+        current_user_check = st.text_input("Mevcut Kullanıcı Adı:")
+        new_username = st.text_input("Yeni Kullanıcı Adı (İsteğe bağlı):")
+        
+        st.write("**Şifre Değiştir**")
+        current_password = st.text_input("Mevcut Şifre:", type="password")
+        new_password = st.text_input("Yeni Şifre:", type="password")
+        confirm_password = st.text_input("Yeni Şifre (Tekrar):", type="password")
+        
+        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
+        if settings_submit:
+            if current_user_check.strip() != st.session_state.get("username", ""):
+                st.error("Mevcut kullanıcı adını yanlış girdiniz!")
+            elif new_password and new_password != confirm_password:
+                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
+            else:
+                try:
+                    res = supabase.table("notes_users").select("*").eq("id", st.session_state.get("user_id", 1)).execute()
+                    if res.data:
+                        db_pass = res.data[0].get("password")
+                        if current_password != db_pass:
