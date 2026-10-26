@@ -157,30 +157,4 @@ if records:
         fig2 = px.histogram(detailed_data, x="Isimler", color="Durum", barmode="group", title="📈 Dagilim")
         st.plotly_chart(fig2, use_container_width=True)
 
-st.markdown("---")
-st.subheader("🗂️ Tum Kayitlar")
-search_query = st.text_input("🔍 Arama Yap:")
-filtered_records = [r for r in records if search_query.lower() in str(r.get("name", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()] if search_query else records
-
-st.info(f"Listelenen Kayıt Sayısı: **{len(filtered_records)}**")
-
-for r in filtered_records:
-    rec_id = r.get("id")
-    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-    c1.markdown(f"**{r.get('name', 'Isimsiz')}**")
-    if r.get('note'): c1.caption(r.get('note'))
-    c2.write(r.get('date', ''))
-    
-    imgs = [i for i in r.get("image_paths", []) if str(i).startswith("http")]
-    if imgs:
-        with c3:
-            with st.expander("📷 Görseller"):
-                for idx, u in enumerate(imgs):
-                    st.markdown(f"[Görsel {idx+1}]({u})", unsafe_allow_html=True)
-    else:
-        c3.text("-")
-        
-    if c4.button("Sil", key=f"del_{rec_id}"):
-        supabase.table("notes_records").delete().eq("id", rec_id).execute()
-        st.rerun()
-    st.markdown("---")
+st
