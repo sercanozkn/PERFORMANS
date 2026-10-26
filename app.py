@@ -21,42 +21,42 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM & KULLANICI YONETIMI ---
+# --- OTURUM & KULLANICI YONETIMI (GARANTİLİ GİRİŞ) ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
     st.title("🔐 Notes - Kullanici Girisi")
     
+    # Veritabanındaki kullanıcıları çekelim
     try:
         res = supabase.table("notes_users").select("*").execute()
         users_list = res.data if res.data else []
     except Exception as e:
         users_list = []
-        st.error(f"Veritabani baglanti hatasi: {e}")
+        st.error(f"Veritabani hatasi: {e}")
+
+    # Hata ayıklama için veritabanında ne olduğunu ekranda görelim
+    if users_list:
+        st.info(f"Veritabanındaki aktif kullanıcı: **{users_list[0].get('username')}** / Şifresi: **{users_list[0].get('password')}**")
+    else:
+        st.warning("Veritabanında hiç kullanıcı bulunamadı! Lütfen SQL Editörden kullanıcı ekleyin.")
 
     with st.form("login_form"):
-        username_input = st.text_input("Kullanici Adi:")
-        password_input = st.text_input("Sifre:", type="password")
-        login_btn = st.form_submit_button("Giris Yap")
+        username_input = st.text_input("Kullanıcı Adı:")
+        password_input = st.text_input("Şifre:", type="password")
+        login_btn = st.form_submit_button("Giriş Yap")
         
         if login_btn:
-            login_success = False
-            matched_user_id = None
-            for u in users_list:
-                if str(u.get("username")).strip() == username_input.strip() and str(u.get("password")).strip() == password_input.strip():
-                    login_success = True
-                    matched_user_id = u.get("id")
-                    break
-            
-            if login_success:
+            # Büyük/küçük harf duyarlılığını ortadan kaldıran esnek kontrol
+            if users_list and str(users_list[0].get("username")).strip().lower() == username_input.strip().lower() and str(users_list[0].get("password")).strip() == password_input.strip():
                 st.session_state["logged_in"] = True
-                st.session_state["user_id"] = matched_user_id
-                st.session_state["username"] = username_input.strip()
-                st.success("Giris basarili! Yonlendiriliyorsunuz...")
+                st.session_state["user_id"] = users_list[0].get("id")
+                st.session_state["username"] = users_list[0].get("username")
+                st.success("Giriş başarılı!")
                 st.rerun()
             else:
-                st.error("Kullanici adi veya sifre hatali!")
+                st.error("Kullanıcı adı veya şifre hatalı!")
     st.stop()
 
 # --- VERILERI YUKLEME ---
@@ -64,20 +64,16 @@ def load_records():
     try:
         response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
         records = response.data if response and response.data else []
-        
         for r in records:
             paths = []
             raw_paths = r.get("image_paths", [])
-            
             if isinstance(raw_paths, str):
                 try:
                     raw_paths = json.loads(raw_paths.replace("'", '"'))
                 except Exception:
                     raw_paths = [raw_paths]
-            
             if not isinstance(raw_paths, list):
                 raw_paths = [raw_paths]
-            
             for p in raw_paths:
                 if p:
                     p_str = str(p).strip("[]'\" ")
@@ -90,10 +86,9 @@ def load_records():
             r["image_paths"] = paths
         return records
     except Exception as e:
-        st.error(f"Veriler yuklenirken hata olustu: {e}")
+        st.error(f"Veriler yüklenirken hata oluştu: {e}")
         return []
 
-# --- RESIM YUKLEME ---
 def save_images(uploaded_files):
     image_paths = []
     if uploaded_files:
@@ -102,18 +97,16 @@ def save_images(uploaded_files):
                 file_ext = os.path.splitext(uploaded_file.name)[1]
                 unique_filename = f"{uuid.uuid4().hex}_{int(datetime.now().timestamp())}{file_ext}"
                 file_bytes = uploaded_file.getvalue()
-                
                 supabase.storage.from_(BUCKET_NAME).upload(
                     path=unique_filename,
                     file=file_bytes,
                     file_options={"content-type": uploaded_file.type}
                 )
-                
                 clean_base_url = SUPABASE_URL.rstrip('/')
                 public_url = f"{clean_base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
                 image_paths.append(public_url)
             except Exception as e:
-                st.error(f"Resim yuklenirken hata olustu: {e}")
+                st.error(f"Resim yüklenirken hata oluştu: {e}")
     return image_paths
 
 # --- SOL MENU / YONETIM PANELI ---
@@ -124,7 +117,7 @@ with st.sidebar.expander("➕ Yeni Kayit / Hata Ekle", expanded=True):
         new_name = st.text_input("Isim / Baslik:")
         new_date = st.text_input("Tarih:", value=datetime.now().strftime("%d/%m/%Y"))
         new_note = st.text_area("Not / Aciklama:")
-        new_images = st.file_uploader("Gorsel Yukle (Coklu Secim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+        new_images = st.file_uploader("Gorsel Yukle:", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
         
         submit_btn = st.form_submit_button("Tabloya Ekle")
         if submit_btn:
@@ -132,7 +125,6 @@ with st.sidebar.expander("➕ Yeni Kayit / Hata Ekle", expanded=True):
                 st.warning("Lutfen bir isim/baslik girin.")
             else:
                 uploaded_urls = save_images(new_images)
-                
                 new_record = {
                     "name": new_name,
                     "date": new_date,
@@ -141,13 +133,82 @@ with st.sidebar.expander("➕ Yeni Kayit / Hata Ekle", expanded=True):
                 }
                 try:
                     supabase.table("notes_records").insert(new_record).execute()
-                    st.success("Kayit basariyla eklendi!")
+                    st.success("Kayit eklendi!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Kayit eklenirken hata olustu: {e}")
+                    st.error(f"Hata: {e}")
 
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
     with st.form("settings_form"):
-        st.write("**Kullanici Bilgileri Degistir**")
-        current_user_check = st.text_input("Mevcut Kullanici Adi:")
-        new_username = st.text_input("Yeni Kullanici Adi (Istege bagli):")
+        st.write("**Sifre Degistir**")
+        curr_p = st.text_input("Mevcut Sifre:", type="password")
+        new_p = st.text_input("Yeni Sifre:", type="password")
+        conf_p = st.text_input("Yeni Sifre (Tekrar):", type="password")
+        
+        if st.form_submit_button("Guncelle"):
+            try:
+                res = supabase.table("notes_users").select("*").eq("id", st.session_state.get("user_id", 1)).execute()
+                if res.data and res.data[0].get("password") == curr_p:
+                    if new_p == conf_p and new_p.strip():
+                        supabase.table("notes_users").update({"password": new_p.strip()}).eq("id", st.session_state.get("user_id", 1)).execute()
+                        st.success("Sifre degistirildi! Tekrar giris yapin.")
+                        st.session_state["logged_in"] = False
+                        st.rerun()
+                    else:
+                        st.error("Yeni sifreler uyusmuyor!")
+                else:
+                    st.error("Mevcut sifre hatali!")
+            except Exception as e:
+                st.error(f"Hata: {e}")
+
+st.sidebar.markdown("---")
+if st.sidebar.button("🚪 Cikis Yap"):
+    st.session_state["logged_in"] = False
+    st.rerun()
+
+# --- ANA EKRAN ---
+st.title("📝 Notes - Hata ve Kayit Takip Paneli")
+records = load_records()
+
+if records:
+    st.subheader("📊 Istatistikler ve Grafikler")
+    col_g1, col_g2 = st.columns(2)
+    name_counts = {}
+    detailed_data = []
+    for r in records:
+        name_val = str(r.get("name", "") or r.get("text", "Isimsiz")).strip() or "Isimsiz"
+        name_counts[name_val] = name_counts.get(name_val, 0) + 1
+        has_image = "Resimli Kayit" if [i for i in r.get("image_paths", []) if str(i).startswith("http")] else "Resimsiz Kayit"
+        detailed_data.append({"Isimler": name_val, "Durum": has_image})
+    
+    chart_data1 = [{"Isimler": k, "Kayit Sayisi": v} for k, v in name_counts.items()]
+    with col_g1:
+        fig1 = px.bar(chart_data1, x="Isimler", y="Kayit Sayisi", title="👤 Toplam Kayitlar")
+        st.plotly_chart(fig1, use_container_width=True)
+    with col_g2:
+        fig2 = px.histogram(detailed_data, x="Isimler", color="Durum", barmode="group", title="📈 Dagilim")
+        st.plotly_chart(fig2, use_container_width=True)
+
+st.markdown("---")
+st.subheader("🗂️ Tum Kayitlar")
+search_query = st.text_input("🔍 Arama Yap:")
+filtered_records = [r for r in records if search_query.lower() in str(r.get("name", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()] if search_query else records
+
+for r in filtered_records:
+    rec_id = r.get("id")
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+    c1.markdown(f"**{r.get('name', 'Isimsiz')}**")
+    if r.get('note'): c1.caption(r.get('note'))
+    c2.write(r.get('date', ''))
+    
+    imgs = [i for i in r.get("image_paths", []) if str(i).startswith("http")]
+    if imgs:
+        with c3.expander(f"📷 ({len(imgs)})"):
+            for idx, u in enumerate(imgs): c3.markdown(f"[Görsel {idx+1}]({u})")
+    else:
+        c3.text("-")
+        
+    if c4.button("Sil", key=f"del_{rec_id}"):
+        supabase.table("notes_records").delete().eq("id", rec_id).execute()
+        st.rerun()
+    st.markdown("---")
