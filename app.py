@@ -18,6 +18,18 @@ if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
 # --- YARDIMCI FONKSİYONLAR ---
+# --- SUPABASE BAĞLANTISI VE YARDIMCI FONKSİYON ---
+@st.cache_resource
+def init_supabase():
+    url = "".join(str(st.secrets.get("SUPABASE_URL", "")).split())
+    key = "".join(str(st.secrets.get("SUPABASE_KEY", "")).split())
+    if not url.startswith("http"):
+        url = "https://" + url
+    return create_client(url, key)
+
+supabase = init_supabase()
+BUCKET_NAME = "notes-media"
+
 def load_records():
     try:
         response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
@@ -31,6 +43,13 @@ def load_records():
             else:
                 r["image_paths"] = []
         return records
+    except Exception as e:
+        try:
+            response = supabase.table("notes").select("*").execute()
+            return response.data if response and response.data else []
+        except Exception as inner_e:
+            st.error(f"Veriler yüklenirken hata oluştu: {inner_e}")
+            return []
     except Exception as e:
         try:
             response = supabase.table("notes").select("*").execute()
