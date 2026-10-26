@@ -30,7 +30,6 @@ def load_records():
             paths = []
             raw_paths = r.get("image_paths", [])
             
-            # Eğer string olarak kaydedilmişse listeye çevir
             if isinstance(raw_paths, str):
                 try:
                     raw_paths = json.loads(raw_paths.replace("'", '"'))
@@ -44,7 +43,6 @@ def load_records():
                 if p:
                     p_str = str(p).strip("[]'\" ")
                     if p_str.startswith("http"):
-                        # İç içe geçmiş bozuk linkleri temizle
                         for sub_p in p_str.split("https://"):
                             if sub_p.strip():
                                 clean_url = "https://" + sub_p.strip("[]'\" ,")
@@ -140,26 +138,4 @@ if filtered_records:
             st.caption(r.get('note', ''))
             
         with col2:
-            st.write(r.get('date', ''))
-            
-        with col3:
-            imgs = r.get("image_paths", [])
-            valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
-            if valid_imgs:
-                for idx, img_url in enumerate(valid_imgs):
-                    st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
-            else:
-                st.text("-")
-                    
-        with col4:
-            if st.button("Sil", key=f"del_{r.get('id', 0)}"):
-                try:
-                    supabase.table("notes_records").delete().eq("id", r.get('id')).execute()
-                    st.success("Kayıt silindi!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Silinirken hata oluştu: {e}")
-                
-        st.markdown("---")
-else:
-    st.info("Kayıt bulunmuyor.")
+            st.write(r.
