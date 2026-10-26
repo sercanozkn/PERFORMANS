@@ -109,7 +109,7 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
 
-# --- LİSTELEME VE ARAMA ---
+# --- ARAMA VE LİSTELEME ---
 search_query = st.text_input("🔍 Kayıtlarda Arama Yap:")
 
 filtered_records = records
@@ -138,4 +138,27 @@ if filtered_records:
             st.caption(r.get('note', ''))
             
         with col2:
-            st.write(r.
+            st.write(r.get('date', ''))
+            
+        with col3:
+            imgs = r.get("image_paths", [])
+            valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
+            if valid_imgs:
+                with st.expander(f"📷 Görseller ({len(valid_imgs)})"):
+                    for idx, img_url in enumerate(valid_imgs):
+                        st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
+            else:
+                st.text("-")
+                    
+        with col4:
+            if st.button("Sil", key=f"del_{r.get('id', 0)}"):
+                try:
+                    supabase.table("notes_records").delete().eq("id", r.get('id')).execute()
+                    st.success("Kayıt silindi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Silinirken hata oluştu: {e}")
+                
+        st.markdown("---")
+else:
+    st.info("Kayıt bulunmuyor.")
