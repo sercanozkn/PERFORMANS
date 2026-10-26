@@ -30,33 +30,7 @@ def init_supabase():
 supabase = init_supabase()
 BUCKET_NAME = "notes-media"
 
-def load_records():
-    try:
-        response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
-        records = response.data if response and response.data else []
-        
-        for r in records:
-            if "image_path" in r and "image_paths" not in r:
-                r["image_paths"] = [r["image_path"]] if r["image_path"] else []
-            if "image_paths" in r and isinstance(r["image_paths"], list):
-                r["image_paths"] = [p for p in r["image_paths"] if p and str(p).startswith("http")]
-            else:
-                r["image_paths"] = []
-        return records
-    except Exception as e:
-        try:
-            response = supabase.table("notes").select("*").execute()
-            return response.data if response and response.data else []
-        except Exception as inner_e:
-            st.error(f"Veriler yüklenirken hata oluştu: {inner_e}")
-            return []
-    except Exception as e:
-        try:
-            response = supabase.table("notes").select("*").execute()
-            return response.data if response and response.data else []
-        except Exception as inner_e:
-            st.error(f"Veriler yüklenirken hata oluştu: {inner_e}")
-            return []
+from supabase import create_client, Client
 
 def save_records(records):
     with open(DB_FILE, "w", encoding="utf-8") as f:
