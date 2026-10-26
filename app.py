@@ -36,13 +36,33 @@ def load_records():
         response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
         records = response.data if response and response.data else []
         
+        # Supabase Storage public URL tabanını hazırlayalım (eski resimler nokta kalmasın diye)
+        url = "".join(str(st.secrets.get("SUPABASE_URL", "")).split())
+        if not url.startswith("http"):
+            url = "https://" + url
+        if url.endswith("/"):
+            url = url[:-1]
+        storage_base = f"{url}/storage/v1/object/public/{BUCKET_NAME}/"
+
         for r in records:
-            if "image_path" in r and "image_paths" not in r:
-                r["image_paths"] = [r["image_path"]] if r["image_path"] else []
-            if "image_paths" in r and isinstance(r["image_paths"], list):
-                r["image_paths"] = [p for p in r["image_paths"] if p and str(p).startswith("http")]
-            else:
-                r["image_paths"] = []
+            paths = []
+            raw_paths = r.get("image_paths", [])
+            if not raw_paths and r.get("image_path"):
+                raw_paths = [r.get("image_path")]
+            
+            if isinstance(raw_paths, str):
+                raw_paths = [raw_paths]
+                
+            for p in raw_paths:
+                if p:
+                    p_str = str(p).strip()
+                    if p_str.startswith("http"):
+                        paths.append(p_str)
+                    else:
+                        filename = os.path.basename(p_str)
+                        paths.append(storage_base + filename)
+            r["image_paths"] = paths
+            
         return records
     except Exception as e:
         try:
