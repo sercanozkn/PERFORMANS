@@ -85,7 +85,6 @@ records = load_records()
 
 # --- GRAFİK / İSTATİSTİK BÖLÜMÜ ---
 if records:
-    # Tarihlere göre kayıt sayılarını hesaplama
     date_counts = {}
     for r in records:
         dt = r.get("date", "Bilinmiyor")
@@ -155,4 +154,22 @@ if filtered_records:
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
         with col1:
-            name_val = r.get('name', '') or r.get('text', 'İ
+            name_val = r.get('name', '') or r.get('text', 'İsimsiz')
+            st.markdown(f"**{name_val}**")
+            st.caption(r.get('note', ''))
+            
+        with col2:
+            st.write(r.get('date', ''))
+            
+        with col3:
+            imgs = r.get("image_paths", [])
+            valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
+            if valid_imgs:
+                with st.expander(f"📷 Görseller ({len(valid_imgs)})"):
+                    for idx, img_url in enumerate(valid_imgs):
+                        st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
+            else:
+                st.text("-")
+                    
+        with col4:
+            if st.button
