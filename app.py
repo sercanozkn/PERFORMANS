@@ -29,19 +29,27 @@ def load_records():
         for r in records:
             paths = []
             raw_paths = r.get("image_paths", [])
-            if not raw_paths and r.get("image_path"):
-                raw_paths = [r.get("image_path")]
+            
+            # Eğer string olarak kaydedilmişse listeye çevir
             if isinstance(raw_paths, str):
+                try:
+                    raw_paths = json.loads(raw_paths.replace("'", '"'))
+                except Exception:
+                    raw_paths = [raw_paths]
+            
+            if not isinstance(raw_paths, list):
                 raw_paths = [raw_paths]
             
             for p in raw_paths:
                 if p:
-                    p_str = str(p).strip()
+                    p_str = str(p).strip("[]'\" ")
                     if p_str.startswith("http"):
-                        paths.append(p_str)
-                    elif len(p_str) > 5 and not p_str.startswith("•"):
-                        clean_base = SUPABASE_URL.rstrip('/')
-                        paths.append(f"{clean_base}/storage/v1/object/public/{BUCKET_NAME}/{p_str}")
+                        # İç içe geçmiş bozuk linkleri temizle
+                        for sub_p in p_str.split("https://"):
+                            if sub_p.strip():
+                                clean_url = "https://" + sub_p.strip("[]'\" ,")
+                                if clean_url not in paths:
+                                    paths.append(clean_url)
             r["image_paths"] = paths
         return records
     except Exception as e:
@@ -139,7 +147,6 @@ if filtered_records:
             valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
             if valid_imgs:
                 for idx, img_url in enumerate(valid_imgs):
-                    # st.image yerine doğrudan tıklanabilir link vererek test edelim
                     st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
             else:
                 st.text("-")
