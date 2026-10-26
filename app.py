@@ -108,7 +108,11 @@ def save_images(uploaded_files):
             
             public_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
             image_urls.append(public_url)
+public_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
+            image_urls.append(public_url)
+            st.write("Oluşan URL:", public_url)  # Bu satırı ekleyin
             
+    return image_urls            
     return image_urls
 # --- OTURUM (SESSION) YÖNETİMİ ---
 if "authenticated" not in st.session_state:
