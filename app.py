@@ -45,8 +45,12 @@ def load_records():
                 r["image_paths"] = []
         return records
     except Exception as e:
-        st.error(f"Veriler yüklenirken hata oluştu: {e}")
-        return []
+        try:
+            response = supabase.table("notes").select("*").execute()
+            return response.data if response and response.data else []
+        except Exception as inner_e:
+            st.error(f"Veriler yüklenirken hata oluştu: {inner_e}")
+            return []
 
 def save_records(records):
     with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -96,7 +100,33 @@ records = load_records()
 
 st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
 
-# Arama ve Filtreleme
+# --- YENİ KAYIT EKLEME FORMU ---
+with st.expander("➕ Yeni Kayıt / Hata Ekle"):
+    with st.form("add_form", clear_on_submit=True):
+        new_text = st.text_input("Text (İsim):")
+        new_date = st.text_input("Date (Tarih):", value=datetime.now().strftime("%d/%m/%Y"))
+        new_note = st.text_area("Not / Açıklama:")
+        new_images = st.file_uploader("Files & media (Resim Yükle - Çoklu Seçim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+        
+        submit_btn = st.form_submit_button("Tabloya Ekle")
+        if submit_btn:
+            uploaded_urls = save_images(new_images)
+            max_id = max([r.get("id", 0) for r in records], default=0) if records else 0
+            new_record = {
+                "id": max_id + 1,
+                "text": new_text,
+                "date": new_date,
+                "note": new_note,
+                "image_paths": uploaded_urls
+            }
+            try:
+                supabase.table("notes_records").insert(new_record).execute()
+                st.success("Kayıt başarıyla eklendi!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Kayıt eklenirken hata oluştu: {e}")
+
+# --- ARAMA VE LİSTELEME ---
 search_query = st.text_input("🔍 Kayıtlarda Arama Yap (İsim veya Not):")
 
 filtered_records = records
@@ -108,17 +138,50 @@ if search_query:
 
 if filtered_records:
     st.write(f"Toplam {len(filtered_records)} kayıt gösteriliyor.")
+    
+    # Tablo Başlıkları
+    col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1, 1, 1])
+    with col_h1:
+        st.markdown("**İsim & Not**")
+    with col_h2:
+        st.markdown("**Tarih**")
+    with col_h3:
+        st.markdown("**Görsel**")
+    with col_h4:
+        st.markdown("**İşlem**")
+    st.markdown("---")
+
     for r in filtered_records:
-        st.markdown(f"**İsim:** {r.get('text', '')} | **Tarih:** {r.get('date', '')}")
-        st.markdown(f"**Not:** {r.get('note', '')}")
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
-        # Resimler varsa minyatür olarak göster
-        imgs = r.get("image_paths", [])
-        if imgs:
-            cols = st.columns(min(len(imgs), 3))
-            for idx, img_url in enumerate(imgs):
-                with cols[idx % len(cols)]:
-                    st.image(img_url, width=100)
-        st.divider()
+        with col1:
+            name_val = r.get('text', '') or r.get('name', 'İsimsiz')
+            st.markdown(f"**{name_val}**")
+            st.caption(r.get('note', ''))
+            
+        with col2:
+            st.write(r.get('date', ''))
+            
+        with col3:
+            imgs = r.get("image_paths", [])
+            if imgs:
+                for img_url in imgs:
+                    if str(img_url).startswith("http"):
+                        st.image(img_url, width=45)
+                    else:
+                        st.write("•")
+            else:
+                st.write("-")
+                
+        with col4:
+            if st.button("Sil", key=f"del_{r.get('id', 0)}"):
+                try:
+                    supabase.table("notes_records").delete().eq("id", r.get('id')).execute()
+                    st.success("Kayıt silindi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Silinirken hata oluştu: {e}")
+                
+        st.markdown("---")
 else:
     st.info("Aramanıza uygun veya henüz eklenmiş bir kayıt bulunmuyor.")
