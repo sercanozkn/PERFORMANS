@@ -145,5 +145,4 @@ with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
         
         st.write("**Şifre Değiştir**")
         current_password_input = st.text_input("Mevcut Şifre:", type="password")
-        new_password_input = st.text_input("Yeni Şifre:", type="password")
-        confirm_password_input = st
+        new_password
