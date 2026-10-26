@@ -141,7 +141,7 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                 }
                 try:
                     supabase.table("notes_records").insert(new_record).execute()
-                    st.success("Kayıt başarıyla eklendi!")
+                    st.success("Kayıт başarıyla eklendi!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Kayıt eklenirken hata oluştu: {e}")
@@ -152,20 +152,4 @@ with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
         current_user_check = st.text_input("Mevcut Kullanıcı Adı:")
         new_username = st.text_input("Yeni Kullanıcı Adı (İsteğe bağlı):")
         
-        st.write("**Şifre Değiştir**")
-        current_password = st.text_input("Mevcut Şifre:", type="password")
-        new_password = st.text_input("Yeni Şifre:", type="password")
-        confirm_password = st.text_input("Yeni Şifre (Tekrar):", type="password")
-        
-        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
-        if settings_submit:
-            if current_user_check.strip() != st.session_state.get("username", ""):
-                st.error("Mevcut kullanıcı adını yanlış girdiniz!")
-            elif new_password and new_password != confirm_password:
-                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
-            else:
-                try:
-                    res = supabase.table("notes_users").select("*").eq("id", st.session_state.get("user_id", 1)).execute()
-                    if res.data:
-                        db_pass = res.data[0].get("password")
-                        if current_password != db_pass:
+        st.write("**Şifre De
