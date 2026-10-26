@@ -109,7 +109,7 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             except Exception as e:
                 st.error(f"Kayıt eklenirken hata oluştu: {e}")
 
-# 2. Ayarlar Sekmesi (Şifre ve Kullanıcı Adı Değiştirme)
+# 2. Ayarlar Sekmesi
 with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
     with st.form("settings_form"):
         st.write("**Kullanıcı Bilgileri**")
@@ -129,4 +129,25 @@ with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
                 st.success("Ayarlar başarıyla güncellendi!")
 
 # --- ANA EKRAN ---
-st.title("📝
+st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
+
+records = load_records()
+
+# --- İSTATİSTİKLER VE GRAFİKLER ---
+if records:
+    st.subheader("📊 İstatistikler ve Grafikler")
+    col_g1, col_g2 = st.columns(2)
+    
+    name_counts = {}
+    detailed_data = []
+    
+    for r in records:
+        name_val = str(r.get("name", "") or r.get("text", "İsimsiz")).strip()
+        if not name_val:
+            name_val = "İsimsiz"
+            
+        name_counts[name_val] = name_counts.get(name_val, 0) + 1
+        
+        imgs = r.get("image_paths", [])
+        valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
+        has_image = "Resimli Kayıt" if valid_imgs
