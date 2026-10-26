@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 import uuid
 import streamlit as st
+import plotly.express as px
 from supabase import create_client, Client
 
 # --- SAYFA AYARI ---
@@ -82,6 +83,27 @@ st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
 
 records = load_records()
 
+# --- GRAFİK / İSTATİSTİK BÖLÜMÜ ---
+if records:
+    # Tarihlere göre kayıt sayılarını hesaplama
+    date_counts = {}
+    for r in records:
+        dt = r.get("date", "Bilinmiyor")
+        date_counts[dt] = date_counts.get(dt, 0) + 1
+    
+    chart_data = [{"Tarih": k, "Kayıt Sayısı": v} for k, v in date_counts.items()]
+    
+    fig = px.bar(
+        chart_data, 
+        x="Tarih", 
+        y="Kayıt Sayısı", 
+        title="📅 Tarihlere Göre Kayıt Dağılımı",
+        text="Kayıt Sayısı"
+    )
+    fig.update_traces(textposition='outside')
+    fig.update_layout(xaxis_title="Tarih", yaxis_title="Kayıt Adedi", margin=dict(t=40, b=20, l=20, r=20))
+    st.plotly_chart(fig, use_container_width=True)
+
 # --- YENİ KAYIT FORMU ---
 with st.expander("➕ Yeni Kayıt / Hata Ekle"):
     with st.form("add_form", clear_on_submit=True):
@@ -133,32 +155,4 @@ if filtered_records:
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
         with col1:
-            name_val = r.get('name', '') or r.get('text', 'İsimsiz')
-            st.markdown(f"**{name_val}**")
-            st.caption(r.get('note', ''))
-            
-        with col2:
-            st.write(r.get('date', ''))
-            
-        with col3:
-            imgs = r.get("image_paths", [])
-            valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
-            if valid_imgs:
-                with st.expander(f"📷 Görseller ({len(valid_imgs)})"):
-                    for idx, img_url in enumerate(valid_imgs):
-                        st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
-            else:
-                st.text("-")
-                    
-        with col4:
-            if st.button("Sil", key=f"del_{r.get('id', 0)}"):
-                try:
-                    supabase.table("notes_records").delete().eq("id", r.get('id')).execute()
-                    st.success("Kayıt silindi!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Silinirken hata oluştu: {e}")
-                
-        st.markdown("---")
-else:
-    st.info("Kayıt bulunmuyor.")
+            name_val = r.get('name', '') or r.get('text', 'İ
