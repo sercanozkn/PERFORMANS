@@ -157,4 +157,67 @@ if records:
         fig2 = px.histogram(detailed_data, x="Isimler", color="Durum", barmode="group", title="📈 Dagilim")
         st.plotly_chart(fig2, use_container_width=True)
 
-st
+st.markdown("---")
+st.subheader("🗂️ Tum Kayitlar")
+search_query = st.text_input("🔍 Arama Yap:")
+filtered_records = [r for r in records if search_query.lower() in str(r.get("name", "")).lower() or search_query.lower() in str(r.get("note", "")).lower()] if search_query else records
+
+st.info(f"Listelenen Kayıt Sayısı: **{len(filtered_records)}**")
+
+for r in filtered_records:
+    rec_id = r.get("id")
+    edit_key = f"editing_{rec_id}"
+    if edit_key not in st.session_state:
+        st.session_state[edit_key] = False
+
+    if not st.session_state[edit_key]:
+        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+        c1.markdown(f"**{r.get('name', 'Isimsiz')}**")
+        if r.get('note'): c1.caption(r.get('note'))
+        c2.write(r.get('date', ''))
+        
+        imgs = [i for i in r.get("image_paths", []) if str(i).startswith("http")]
+        if imgs:
+            with c3:
+                with st.expander("📷 Görseller"):
+                    for idx, u in enumerate(imgs):
+                        st.markdown(f"[Görsel {idx+1}]({u})", unsafe_allow_html=True)
+        else:
+            c3.text("-")
+            
+        col_btn1, col_btn2 = c4.columns(2)
+        if col_btn1.button("Düzenle", key=f"edit_btn_{rec_id}"):
+            st.session_state[edit_key] = True
+            st.rerun()
+        if col_btn2.button("Sil", key=f"del_{rec_id}"):
+            supabase.table("notes_records").delete().eq("id", rec_id).execute()
+            st.rerun()
+    else:
+        with st.form(key=f"edit_form_{rec_id}"):
+            st.markdown(f"### Kaydı Düzenle (ID: {rec_id})")
+            new_edit_name = st.text_input("İsim / Başlık", value=r.get("name", ""))
+            new_edit_date = st.text_input("Tarih", value=r.get("date", ""))
+            new_edit_note = st.text_area("Not / Açıklama", value=r.get("note", ""))
+            
+            col_save, col_cancel = st.columns(2)
+            save_clicked = col_save.form_submit_button("Kaydet")
+            cancel_clicked = col_cancel.form_submit_button("İptal")
+            
+            if save_clicked:
+                try:
+                    supabase.table("notes_records").update({
+                        "name": new_edit_name,
+                        "date": new_edit_date,
+                        "note": new_edit_note
+                    }).eq("id", rec_id).execute()
+                    st.session_state[edit_key] = False
+                    st.success("Kayıt güncellendi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Güncelleme hatası: {e}")
+                    
+            if cancel_clicked:
+                st.session_state[edit_key] = False
+                st.rerun()
+
+    st.markdown("---")
