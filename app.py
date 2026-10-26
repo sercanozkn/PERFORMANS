@@ -21,37 +21,39 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM & KULLANICI YÖNETİMİ (VERİTABANINDAN ÇEKME) ---
+# --- OTURUM & KULLANICI YÖNETİMİ (VERİTABANI BAĞLANTILI) ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
-def get_db_user():
-    """Supabase'den kullanıcı bilgilerini çeker, yoksa varsayılan oluşturur."""
-    try:
-        res = supabase.table("notes_users").select("*").limit(1).execute()
-        if res.data and len(res.data) > 0:
-            return res.data[0]
-        else:
-            # Tablo boşsa varsayılan ekle
-            default_user = {"username": "admin", "password": "1234"}
-            supabase.table("notes_users").insert(default_user).execute()
-            return default_user
-    except Exception:
-        # Tablo henüz oluşturulmadıysa geçici nesne dön
-        return {"id": 1, "username": "admin", "password": "1234"}
-
-db_user = get_db_user()
-
 if not st.session_state["logged_in"]:
     st.title("🔐 Notes - Kullanıcı Girişi")
+    
+    # Veritabanından kullanıcıları anlık çekelim
+    try:
+        res = supabase.table("notes_users").select("*").execute()
+        users_list = res.data if res.data else []
+    except Exception as e:
+        users_list = []
+        st.error(f"Veritabanı bağlantı hatası: {e}")
+
     with st.form("login_form"):
         username_input = st.text_input("Kullanıcı Adı:")
         password_input = st.text_input("Şifre:", type="password")
         login_btn = st.form_submit_button("Giriş Yap")
         
         if login_btn:
-            if username_input == db_user.get("username") and password_input == db_user.get("password"):
+            login_success = False
+            matched_user_id = None
+            for u in users_list:
+                if str(u.get("username")).strip() == username_input.strip() and str(u.get("password")).strip() == password_input.strip():
+                    login_success = True
+                    matched_user_id = u.get("id")
+                    break
+            
+            if login_success:
                 st.session_state["logged_in"] = True
+                st.session_state["user_id"] = matched_user_id
+                st.session_state["username"] = username_input.strip()
                 st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
                 st.rerun()
             else:
@@ -140,165 +142,4 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
                     "image_paths": uploaded_urls
                 }
                 try:
-                    supabase.table("notes_records").insert(new_record).execute()
-                    st.success("Kayıt başarıyla eklendi!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Kayıt eklenirken hata oluştu: {e}")
-
-# 2. Ayarlar Sekmesi (Şifre & Kullanıcı Adı Güncelleme - Kalıcı)
-with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
-    with st.form("settings_form"):
-        st.write("**Kullanıcı Bilgileri Değiştir**")
-        current_user_check = st.text_input("Mevcut Kullanıcı Adı:")
-        new_username = st.text_input("Yeni Kullanıcı Adı (İsteğe bağlı):")
-        
-        st.write("**Şifre Değiştir**")
-        current_password = st.text_input("Mevcut Şifre:", type="password")
-        new_password = st.text_input("Yeni Şifre:", type="password")
-        confirm_password = st.text_input("Yeni Şifre (Tekrar):", type="password")
-        
-        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
-        if settings_submit:
-            if current_user_check != db_user.get("username") or current_password != db_user.get("password"):
-                st.error("Mevcut kullanıcı adı veya şifre yanlış!")
-            elif new_password and new_password != confirm_password:
-                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
-            else:
-                updated_data = {}
-                if new_username.strip():
-                    updated_data["username"] = new_username.strip()
-                if new_password.strip():
-                    updated_data["password"] = new_password.strip()
-                
-                if updated_data:
-                    try:
-                        # Supabase üzerindeki kullanıcı bilgilerini güncelle
-                        supabase.table("notes_users").update(updated_data).eq("id", db_user.get("id", 1)).execute()
-                        st.success("Ayarlar başarıyla veritabanına kaydedildi! Yeniden giriş yapılıyor...")
-                        st.session_state["logged_in"] = False
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Güncellenirken hata oluştu: Tablo kontrolü yapın ({e})")
-                else:
-                    st.warning("Değiştirilecek yeni bir bilgi girmediniz.")
-
-st.sidebar.markdown("---")
-
-# 3. Çıkış Yap Butonu
-if st.sidebar.button("🚪 Çıkış Yap"):
-    st.session_state["logged_in"] = False
-    st.rerun()
-
-# --- ANA EKRAN ---
-st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
-
-records = load_records()
-
-# --- İSTATİSTİKLER VE GRAFİKLER ---
-if records:
-    st.subheader("📊 İstatistikler ve Grafikler")
-    col_g1, col_g2 = st.columns(2)
-    
-    name_counts = {}
-    detailed_data = []
-    
-    for r in records:
-        name_val = str(r.get("name", "") or r.get("text", "İsimsiz")).strip()
-        if not name_val:
-            name_val = "İsimsiz"
-            
-        name_counts[name_val] = name_counts.get(name_val, 0) + 1
-        
-        imgs = r.get("image_paths", [])
-        valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
-        has_image = "Resimli Kayıt" if valid_imgs else "Resimsiz Kayıt"
-        
-        detailed_data.append({"İsimler": name_val, "Durum": has_image})
-    
-    chart_data1 = [{"İsimler": k, "Kayıt Sayısı": v} for k, v in name_counts.items()]
-    
-    with col_g1:
-        fig1 = px.bar(
-            chart_data1, 
-            x="İsimler", 
-            y="Kayıt Sayısı", 
-            title="👤 İsimlere Göre Toplam Kayıt İstatistikleri",
-            text="Kayıt Sayısı"
-        )
-        fig1.update_traces(textposition='outside')
-        fig1.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=20, l=20, r=20))
-        st.plotly_chart(fig1, use_container_width=True)
-        
-    with col_g2:
-        fig2 = px.histogram(
-            detailed_data,
-            x="İsimler",
-            color="Durum",
-            barmode="group",
-            title="📈 İsimlere Göre Resimli / Resimsiz Detaylı Dağılım",
-            color_discrete_map={"Resimli Kayıt": "#00CC96", "Resimsiz Kayıt": "#EF553B"}
-        )
-        fig2.update_layout(xaxis_title="İsimler", yaxis_title="Kayıt Sayısı", margin=dict(t=40, b=25, l=20, r=20))
-        st.plotly_chart(fig2, use_container_width=True)
-
-st.markdown("---")
-st.subheader("🗂️ Tüm Kayıtlar")
-
-# --- ARAMA VE LİSTELEME ---
-search_query = st.text_input("🔍 Kayıtlarda Arama Yap:")
-
-filtered_records = records
-if search_query:
-    query_lower = search_query.lower()
-    filtered_records = [
-        r for r in records 
-        if query_lower in str(r.get("name", "") or "").lower() or query_lower in str(r.get("note", "") or "").lower()
-    ]
-
-if filtered_records:
-    st.write(f"Toplam **{len(filtered_records)}** kayıt gösteriliyor.")
-    
-    col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1, 1, 1])
-    col_h1.markdown("**İsim & Not**")
-    col_h2.markdown("**Tarih**")
-    col_h3.markdown("**Görsel**")
-    col_h4.markdown("**İşlem**")
-    st.markdown("---")
-
-    for r in filtered_records:
-        rec_id = r.get("id")
-        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-        
-        with col1:
-            name_val = r.get('name', '') or r.get('text', 'İsimsiz')
-            st.markdown(f"**{name_val}**")
-            note_val = r.get('note', '')
-            if note_val:
-                st.caption(note_val)
-            
-        with col2:
-            st.write(r.get('date', ''))
-            
-        with col3:
-            imgs = r.get("image_paths", [])
-            valid_imgs = [img for img in imgs if img and str(img).startswith("http")]
-            if valid_imgs:
-                with st.expander(f"📷 Görseller ({len(valid_imgs)})"):
-                    for idx, img_url in enumerate(valid_imgs):
-                        st.markdown(f"[Görseli Aç {idx+1}]({img_url})", unsafe_allow_html=True)
-            else:
-                st.text("-")
-                    
-        with col4:
-            if st.button("SİL", key=f"del_{rec_id}"):
-                try:
-                    supabase.table("notes_records").delete().eq("id", rec_id).execute()
-                    st.success("Kayıt silindi!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Silinirken hata oluştu: {e}")
-                
-        st.markdown("---")
-else:
-    st.info("Gösterilecek kayıt bulunamadı.")
+                    supabase.
