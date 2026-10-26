@@ -132,4 +132,6 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             try:
                 supabase.table("notes_records").insert(new_record).execute()
                 st.success("Kayıt başarıyla eklendi!")
-                st.rer
+                st.rerun()
+            except Exception as e:
+                st.error(f"Kayıt eklenirken hata oluştu: {e}")
