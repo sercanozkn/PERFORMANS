@@ -19,18 +19,25 @@ if not os.path.exists(UPLOAD_DIR):
 
 # --- YARDIMCI FONKSİYONLAR ---
 def load_records():
-    if os.path.exists(DB_FILE):
+    try:
+        response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
+        records = response.data if response and response.data else []
+        
+        for r in records:
+            if "image_path" in r and "image_paths" not in r:
+                r["image_paths"] = [r["image_path"]] if r["image_path"] else []
+            if "image_paths" in r and isinstance(r["image_paths"], list):
+                r["image_paths"] = [p for p in r["image_paths"] if p and str(p).startswith("http")]
+            else:
+                r["image_paths"] = []
+        return records
+    except Exception as e:
         try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                records = json.load(f)
-                for r in records:
-                    if "image_path" in r and "image_paths" not in r:
-                        r["image_paths"] = [r["image_path"]] if r["image_path"] else []
-                return records
-        except Exception as e:
-            st.error(f"Veri yüklenirken hata oluştu: {e}")
+            response = supabase.table("notes").select("*").execute()
+            return response.data if response and response.data else []
+        except Exception as inner_e:
+            st.error(f"Veriler yüklenirken hata oluştu: {inner_e}")
             return []
-    return []
 
 def save_records(records):
     with open(DB_FILE, "w", encoding="utf-8") as f:
