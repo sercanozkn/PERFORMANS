@@ -111,4 +111,18 @@ with st.sidebar.expander("➕ Yeni Kayit / Hata Ekle", expanded=True):
                 uploaded_urls = save_images(new_images)
                 new_record = {
                     "name": new_name,
-                    "date": new
+                    "date": new_date,
+                    "note": new_note,
+                    "image_paths": uploaded_urls
+                }
+                try:
+                    supabase.table("notes_records").insert(new_record).execute()
+                    st.success("Kayit eklendi!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Hata: {e}")
+
+with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
+    st.write("Aktif Kullanıcı: **sercan**")
+
+st.
