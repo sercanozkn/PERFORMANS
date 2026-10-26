@@ -62,7 +62,7 @@ def save_images(uploaded_files):
                     file_options={"content-type": uploaded_file.type}
                 )
                 
-                # Public URL alma (Garantili yöntem)
+                # Public URL alma
                 public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
                 
                 if isinstance(public_url, dict):
@@ -91,6 +91,8 @@ with st.expander("➕ Yeni Kayıt / Hata Ekle"):
         submit_btn = st.form_submit_button("Tabloya Ekle")
         if submit_btn:
             uploaded_urls = save_images(new_images)
+            st.write("Oluşan Resim Linkleri:", uploaded_urls) # Debug için linkleri gösteriyoruz
+            
             max_id = max([r.get("id", 0) for r in records], default=0) if records else 0
             
             new_record = {
@@ -145,8 +147,8 @@ if filtered_records:
                 for img_url in valid_imgs:
                     try:
                         st.image(img_url, width=45)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        st.write(f"Hata: {e}")
             else:
                 st.text("-")
                     
