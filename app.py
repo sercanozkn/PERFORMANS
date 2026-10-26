@@ -7,9 +7,9 @@ import plotly.express as px
 from supabase import create_client, Client
 
 # --- SAYFA AYARI ---
-st.set_page_config(page_title="Notes - Kesintisiz Yönetim Sistemi", layout="wide")
+st.set_page_config(page_title="Notes - Yonetim Sistemi", layout="wide")
 
-# --- SUPABASE BAĞLANTISI ---
+# --- SUPABASE BAGLANTISI ---
 @st.cache_resource
 def init_supabase():
     url = "".join(str(st.secrets.get("SUPABASE_URL", "")).split())
@@ -21,7 +21,7 @@ def init_supabase():
 supabase, SUPABASE_URL = init_supabase()
 BUCKET_NAME = "notes-media"
 
-# --- OTURUM YÖNETİMİ (GİRİŞ KONTROLÜ) ---
+# --- OTURUM VE KİMLİK YÖNETİMİ ---
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
@@ -32,22 +32,22 @@ if "app_password" not in st.session_state:
     st.session_state["app_password"] = "1234"
 
 if not st.session_state["logged_in"]:
-    st.title("🔐 Notes - Kullanıcı Girişi")
+    st.title("Kullanici Giris Paneli")
     with st.form("login_form"):
-        username_input = st.text_input("Kullanıcı Adı:")
-        password_input = st.text_input("Şifre:", type="password")
-        login_btn = st.form_submit_button("Giriş Yap")
+        username_input = st.text_input("Kullanici Adi:")
+        password_input = st.text_input("Sifre:", type="password")
+        login_btn = st.form_submit_button("Giris Yap")
         
         if login_btn:
             if username_input == st.session_state["app_username"] and password_input == st.session_state["app_password"]:
                 st.session_state["logged_in"] = True
-                st.success("Giriş başarılı! Yönlendiriliyorsunuz...")
+                st.success("Giris basarili! Yonlendiriliyorsunuz...")
                 st.rerun()
             else:
-                st.error("Kullanıcı adı veya şifre hatalı!")
+                st.error("Kullanici adi veya sifre hatali!")
     st.stop()
 
-# --- VERİLERİ YÜKLEME ---
+# --- VERILERI YUKLEME ---
 def load_records():
     try:
         response = supabase.table("notes_records").select("*").order("id", desc=True).execute()
@@ -78,10 +78,10 @@ def load_records():
             r["image_paths"] = paths
         return records
     except Exception as e:
-        st.error(f"Veriler yüklenirken hata oluştu: {e}")
+        st.error(f"Veriler yuklenirken hata olustu: {e}")
         return []
 
-# --- RESİM YÜKLEME ---
+# --- RESIM YUKLEME ---
 def save_images(uploaded_files):
     image_paths = []
     if uploaded_files:
@@ -101,19 +101,19 @@ def save_images(uploaded_files):
                 public_url = f"{clean_base_url}/storage/v1/object/public/{BUCKET_NAME}/{unique_filename}"
                 image_paths.append(public_url)
             except Exception as e:
-                st.error(f"Resim yüklenirken hata oluştu: {e}")
+                st.error(f"Resim yuklenirken hata olustu: {e}")
     return image_paths
 
-# --- SOL MENÜ / YÖNETİM PANELİ ---
-st.sidebar.title("🛠️ Yönetim Paneli")
+# --- SOL MENU / YONETIM PANELI ---
+st.sidebar.title("Yonetim Paneli")
 
-# 1. Yeni Kayıt Ekleme Bölümü
-with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
+# 1. Yeni Kayit Ekleme Bolumu
+with st.sidebar.expander("Yeni Kayit / Hata Ekle", expanded=True):
     with st.form("add_form", clear_on_submit=True):
-        new_name = st.text_input("İsim / Başlık:")
+        new_name = st.text_input("Isim / Baslik:")
         new_date = st.text_input("Tarih:", value=datetime.now().strftime("%d/%m/%Y"))
-        new_note = st.text_area("Not / Açıklama:")
-        new_images = st.file_uploader("Görsel Yükle (Çoklu Seçim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+        new_note = st.text_area("Not / Aciklama:")
+        new_images = st.file_uploader("Gorsel Yukle (Coklu Secim):", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
         
         submit_btn = st.form_submit_button("Tabloya Ekle")
         if submit_btn:
@@ -130,47 +130,41 @@ with st.sidebar.expander("➕ Yeni Kayıt / Hata Ekle", expanded=True):
             }
             try:
                 supabase.table("notes_records").insert(new_record).execute()
-                st.success("Kayıt başarıyla eklendi!")
+                st.success("Kayit basariyla eklendi!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Kayıt eklenirken hata oluştu: {e}")
+                st.error(f"Kayit eklenirken hata olustu: {e}")
 
-# 2. Ayarlar Sekmesi (Şifre ve Kullanıcı Adı Değiştirme)
-with st.sidebar.expander("⚙️ Ayarlar", expanded=False):
+# 2. Ayarlar Sekmesi (Sifre ve Kullanici Adi Degistirme)
+with st.sidebar.expander("Ayarlar", expanded=False):
     with st.form("settings_form"):
-        st.write("**Kullanıcı Bilgileri**")
-        current_username = st.text_input("Mevcut Kullanıcı Adı:")
-        new_username = st.text_input("Yeni Kullanıcı Adı:")
+        st.write("Kullanici Bilgileri")
+        current_username = st.text_input("Mevcut Kullanici Adi:")
+        new_username = st.text_input("Yeni Kullanici Adi:")
         
-        st.write("**Şifre Değiştir**")
-        current_password = st.text_input("Mevcut Şifre:", type="password")
-        new_password = st.text_input("Yeni Şifre:", type="password")
-        confirm_password = st.text_input("Yeni Şifre (Tekrar):", type="password")
+        st.write("Sifre Degistir")
+        current_password = st.text_input("Mevcut Sifre:", type="password")
+        new_password = st.text_input("Yeni Sifre:", type="password")
+        confirm_password = st.text_input("Yeni Sifre (Tekrar):", type="password")
         
-        settings_submit = st.form_submit_button("Değişiklikleri Kaydet")
+        settings_submit = st.form_submit_button("Degisiklikleri Kaydet")
         if settings_submit:
             if current_username != st.session_state["app_username"] or current_password != st.session_state["app_password"]:
-                st.error("Mevcut kullanıcı adı veya şifre hatalı!")
+                st.error("Mevcut kullanici adi veya sifre hatali!")
             elif new_password and new_password != confirm_password:
-                st.error("Yeni şifreler birbiriyle uyuşmuyor!")
+                st.error("Yeni sifreler birbiriyle uyusmuyor!")
             else:
                 if new_username.strip():
                     st.session_state["app_username"] = new_username.strip()
                 if new_password.strip():
                     st.session_state["app_password"] = new_password.strip()
-                st.success("Ayarlar başarıyla güncellendi!")
+                st.success("Ayarlar basariyla guncellendi!")
 
 st.sidebar.markdown("---")
-# 3. Çıkış Yap Butonu
-if st.sidebar.button("🚪 Çıkış Yap"):
+# 3. Cikis Yap Butonu
+if st.sidebar.button("Cikis Yap"):
     st.session_state["logged_in"] = False
     st.rerun()
 
 # --- ANA EKRAN ---
-st.title("📝 Notes - Hata ve Kayıt Takip Paneli")
-
-records = load_records()
-
-# --- İSTATİSTİKLER VE GRAFİKLER ---
-if records:
-    st.subheader("
+st.
